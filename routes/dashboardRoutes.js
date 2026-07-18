@@ -1,0 +1,13 @@
+const express = require('express');
+const asyncHandler = require('../utils/asyncHandler');
+const requireStaffAuth = require('../middleware/staffAuth');
+const requireOwnerRole = require('../middleware/ownerAuth');
+const { ok } = require('../utils/response');
+const { getOwnerStatistics, getCouponAnalytics, getMemberAnalytics, getSalesAnalytics } = require('../services/dashboardService');
+const router = express.Router();
+router.use(requireStaffAuth, requireOwnerRole);
+router.get('/statistics', asyncHandler(async (req, res) => ok(res, await getOwnerStatistics())));
+router.get('/coupons', asyncHandler(async (req, res) => ok(res, await getCouponAnalytics())));
+router.get('/members', asyncHandler(async (req, res) => ok(res, await getMemberAnalytics())));
+router.get('/sales', asyncHandler(async (req, res) => ok(res, await getSalesAnalytics())));
+module.exports = router;

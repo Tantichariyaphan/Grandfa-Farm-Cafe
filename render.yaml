@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: grandfa-cafe-line-oa
+    runtime: node
+    plan: pro
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+  - type: cron
+    name: grandfa-cafe-birthday-coupons
+    runtime: node
+    schedule: "0 2 * * *"
+    buildCommand: npm ci
+    startCommand: "node -e \"fetch(process.env.APP_BASE_URL + '/api/maintenance/birthday-coupons', {method: 'POST', headers: {'x-maintenance-token': process.env.MAINTENANCE_TOKEN}}).then(r => { if (!r.ok) process.exit(1) })\""
