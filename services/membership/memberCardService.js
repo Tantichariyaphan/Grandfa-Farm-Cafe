@@ -35,7 +35,29 @@ async function buildMemberCard(member) {
   );
 
   const availableRewards = result.rows[0].count;
+let membershipLevel;
+let membershipName;
+let membershipTagline;
+let memberCardBackground;
 
+if (member.total_stamps_earned >= 50) {
+  membershipLevel = 3;
+  membershipName = "Grandfa Heritage";
+  membershipTagline = "A place where memories become traditions.";
+  memberCardBackground = "/pic/membercard/MembercardLevel3.png";
+}
+else if (member.total_stamps_earned >= 20) {
+  membershipLevel = 2;
+  membershipName = "Grandfa Family";
+  membershipTagline = "You're no longer just a guest. You're family.";
+  memberCardBackground = "/pic/membercard/MembercardLevel2.png";
+}
+else {
+  membershipLevel = 1;
+  membershipName = "Grandfa Friend";
+  membershipTagline = "Every great journey starts with a first visit.";
+  memberCardBackground = "/pic/membercard/MembercardLevel1.png";
+}
   return {
     displayName: member.display_name,
     pictureUrl: member.picture_url,
@@ -45,6 +67,10 @@ async function buildMemberCard(member) {
     memberSince: member.created_at,
     qrCode: qrDataUrl,
     availableRewards,
+    membershipLevel,
+    membershipName,
+    membershipTagline,
+    memberCardBackground,
   };
 }
 
