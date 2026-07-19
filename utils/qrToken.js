@@ -45,7 +45,7 @@ function verify(token) {
   const providedBuf = Buffer.from(providedHmac);
 
   if (expectedBuf.length !== providedBuf.length) return null;
-  if (!crypto.timingSafeEqual(expectedBuf, providedHmac)) return null;
+  if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) return null;
 
   try {
     const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
