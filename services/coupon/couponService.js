@@ -225,7 +225,7 @@ async function redeemCoupon(couponCode, staffId, sessionId = null) {
     // Unique constraint on coupon_redemptions.coupon_id guarantees a
     // coupon can only ever be logged as redeemed once, even under race.
     await client.query(
-      `INSERT INTO coupon_redemptions (coupon_id, staff_id, qr_session_id) VALUES ($1, $2, $3)`,
+      `INSERT INTO coupon_redemptions (coupon_id, staff_id) VALUES ($1, $2)`,
       [coupon.id, staffId, sessionId]
     );
 
