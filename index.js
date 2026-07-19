@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -30,6 +31,10 @@ app.use('/api/maintenance', require('./routes/maintenanceRoutes'));
 app.get('/dashboard', (req, res) => res.type('html').send(dashboardPage()));
 app.get('/liff/member', (req, res) => res.type('html').send(memberLiffPage(config.liff.memberId)));
 app.get('/liff/staff', (req, res) => res.type('html').send(staffLiffPage(config.liff.staffId)));
+
+app.use('/pic', express.static(path.join(__dirname, 'pic')));
+
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 
