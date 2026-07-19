@@ -74,15 +74,15 @@ async function validateSession(){try{let path=isStaff?'/api/auth/staff-session':
 
 async function logout(){localStorage.removeItem(isStaff?'gcStaffToken':'gcMemberToken');token='';location.reload()}
 
-async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(!isStaff)view('card')}
+async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(!isStaff){setupNavigationButtons();view('card')}}
 
 function formatCurrency(num){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(num||0)}
 function formatDate(date){return new Date(date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
 function formatDateTime(date){return new Date(date).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 
 function renderMemberCard(data){
-  const progress=(data.current_stamps/10)*100;
-  return '<div class="card"><div class="card-header">'+(data.picture_url?'<img src="'+data.picture_url+'" alt="'+data.display_name+'">':'')+'<h2>'+data.display_name+'</h2></div><div class="card-body"><div class="stats"><div class="stat"><div class="stat-value">'+data.current_stamps+'</div><div class="stat-label">Current Stamps</div></div><div class="stat"><div class="stat-value">'+data.total_stamps_earned+'</div><div class="stat-label">Total Earned</div></div><div class="stat"><div class="stat-value">'+data.points+'</div><div class="stat-label">Points</div></div><div class="stat"><div class="stat-value">'+Math.floor(data.current_stamps/10)+'</div><div class="stat-label">Rewards Available</div></div></div><div class="stamp-progress"><div class="stamp-bar"><div class="stamp-fill" style="width:'+progress+'%">'+data.current_stamps+'/10 stamps</div></div></div><p style="font-size:.85rem;color:#8d6e63;margin:1rem 0">Member since: '+formatDate(data.created_at)+'<br>Member UID: '+data.member_uid+'</p><div class="qr-container"><h3>Your Member QR</h3><img src="'+data.qrCode+'" alt="Member QR Code"></div></div></div>'}
+  const progress=(data.currentStamps/10)*100;
+  return '<div class="card"><div class="card-header">'+(data.pictureUrl?'<img src="'+data.pictureUrl+'" alt="'+data.displayName+'">':'')+'<h2>'+data.displayName+'</h2></div><div class="card-body"><div class="stats"><div class="stat"><div class="stat-value">'+data.currentStamps+'</div><div class="stat-label">Current Stamps</div></div><div class="stat"><div class="stat-value">'+data.points+'</div><div class="stat-label">Points</div></div><div class="stat"><div class="stat-value">'+Math.floor(data.currentStamps/10)+'</div><div class="stat-label">Rewards Available</div></div></div><div class="stamp-progress"><div class="stamp-bar"><div class="stamp-fill" style="width:'+progress+'%">'+data.currentStamps+'/10 stamps</div></div></div><p style="font-size:.85rem;color:#8d6e63;margin:1rem 0">Member since: '+formatDate(data.memberSince)+'<br>Member UID: '+data.memberUid+'</p><div class="qr-container"><h3>Your Member QR</h3><img src="'+data.qrCode+'" alt="Member QR Code"></div></div></div>'}
 
 function renderProfile(data){
   return '<div class="card"><div class="card-header"><h2>Profile</h2></div><div class="card-body"><form id="profileForm"><div class="form-group"><label>Display Name</label><input value="'+data.display_name+'" disabled></div><div class="form-group"><label>Phone</label><input id="phone" type="tel" value="'+(data.phone||'')+'" placeholder="Enter phone number"></div><div class="form-group"><label>Birthday</label><input id="birthday" type="date" value="'+(data.birthday||'')+'"></div><button type="submit" id="saveProfileBtn">Save Changes</button></form><p id="profileMessage"></p></div></div>'}
@@ -92,12 +92,12 @@ function renderCoupons(data){
   return data.map(function(c){return '<div class="coupon-card '+c.status+'"'+(c.status==='unused'?' data-code="'+c.code+'"':'')+'><div class="coupon-header '+c.status+'"><h3>'+c.title+'</h3><small>'+c.type.toUpperCase()+'</small></div><div class="coupon-body"><div class="coupon-title">'+(c.description||'')+'</div><div class="coupon-meta">Status: '+c.status.toUpperCase()+'<br>Expires: '+formatDate(c.expires_at)+'<br>Code: '+c.code+'</div></div></div>'}).join('')}
 
 function renderStampHistory(data){
-  if(!data||data.length===0)return '<div class="empty-state"><h3>No Stamp History</h3><p>Start collecting stamps today!</p></div>';
-  return '<div class="card"><div class="card-body">'+data.map(s=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>+'+s.quantity+' stamps</strong><br><small>'+formatDateTime(s.created_at)+'</small></div>').join('')+'</div></div>'}
+  if(!data||!data.items||data.items.length===0)return '<div class="empty-state"><h3>No Stamp History</h3><p>Start collecting stamps today!</p></div>';
+  return '<div class="card"><div class="card-body">'+data.items.map(s=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>+'+s.stamps_earned+' stamps</strong><br><small>'+formatDateTime(s.created_at)+'</small></div>').join('')+'</div></div>'}
 
 function renderRewardHistory(data){
-  if(!data||data.length===0)return '<div class="empty-state"><h3>No Reward History</h3><p>Redeem your first reward coupon!</p></div>';
-  return '<div class="card"><div class="card-body">'+data.map(r=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>'+r.coupon_title+'</strong><br><small>'+r.stamps_used+' stamps • '+formatDateTime(r.created_at)+'</small></div>').join('')+'</div></div>'}
+  if(!data||!data.items||data.items.length===0)return '<div class="empty-state"><h3>No Reward History</h3><p>Redeem your first reward coupon!</p></div>';
+  return '<div class="card"><div class="card-body">'+data.items.map(r=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>'+r.title+'</strong><br><small>'+r.stamps_used+' stamps • '+formatDateTime(r.created_at)+'</small></div>').join('')+'</div></div>'}
 
 async function view(name){
   const content=document.getElementById('content');
@@ -115,6 +115,8 @@ async function showCouponQR(code){try{const data=await api('/api/member/coupons/
 function closeModal(){document.getElementById('modal').classList.add('hidden')}
 
 function setupCouponClickHandlers(){document.querySelectorAll('.coupon-card.unused').forEach(function(card){card.addEventListener('click',function(){var code=this.getAttribute('data-code');if(code)showCouponQR(code)})})}
+
+function setupNavigationButtons(){document.querySelectorAll('[data-view]').forEach(function(btn){btn.addEventListener('click',function(){view(this.dataset.view)})})}
 
 async function setupProfileForm(){const form=document.getElementById('profileForm');const btn=document.getElementById('saveProfileBtn');const msg=document.getElementById('profileMessage');form.onsubmit=async e=>{e.preventDefault();btn.disabled=true;btn.textContent='Saving…';try{const phone=document.getElementById('phone').value.trim();const birthday=document.getElementById('birthday').value;await api('/api/member/profile',{method:'PUT',body:JSON.stringify({phone,birthday})});msg.className='success';msg.textContent='✓ Profile updated successfully!'}catch(e){msg.className='error';msg.textContent='⚠️ '+e.message}finally{btn.disabled=false;btn.textContent='Save Changes'}}}
 

@@ -22,7 +22,8 @@ async function getProfile(memberId) {
  * @param {{ phone?: string, birthday?: string }} updates
  */
 async function updateProfile(memberId, updates) {
-  const { phone = null, birthday = null } = updates;
+  const phone = updates.phone?.trim() || null;
+  const birthday = updates.birthday?.trim() || null;
 
   const result = await query(
     `UPDATE members
