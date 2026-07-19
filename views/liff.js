@@ -1,10 +1,138 @@
 function page({ title, liffId, staff = false }) {
-  const login = staff
-    ? `<section id="login"><h2>Staff sign-in</h2><input id="username" placeholder="Username"><input id="password" type="password" placeholder="Password"><button id="signIn">Sign in</button></section>`
-    : '<p id="status">Connecting to LINE…</p>';
-  const controls = staff
-    ? '<section><h2>Member QR</h2><textarea id="memberToken" placeholder="Paste or scan member QR token"></textarea><input id="quantity" type="number" min="1" max="50" value="1"><button id="addStamp">Add stamps</button><h2>Coupon QR</h2><textarea id="couponToken" placeholder="Paste or scan coupon QR token"></textarea><button id="redeem">Redeem coupon</button></section>'
-    : '<nav><button data-view="card">Member card</button><button data-view="profile">Profile</button><button data-view="coupons">Coupons</button><button data-view="stamps">Stamp history</button><button data-view="rewards">Reward history</button></nav><section id="content"></section>';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font-family:system-ui;background:#faf7f3;color:#3e2723;margin:0 auto;max-width:720px;padding:1rem}button,input,textarea{font:inherit;padding:.7rem;margin:.25rem}button{background:#5b3a29;color:#fff;border:0;border-radius:.3rem}textarea{display:block;width:95%;min-height:5rem}pre{white-space:pre-wrap;background:#fff;padding:1rem;border-radius:.5rem}</style></head><body><h1>${title}</h1>${login}<main id="app" hidden>${controls}<p id="result"></p></main><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>const isStaff=${staff};let token=localStorage.getItem(isStaff?'gcStaffToken':'gcMemberToken')||'';const out=document.getElementById('result');function show(x){out.textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}async function api(path,opt={}){let r=await fetch(path,{...opt,headers:{...(opt.headers||{}),'Content-Type':'application/json',Authorization:'Bearer '+token}});let j=await r.json();if(!j.success)throw Error(j.message);return j.data}async function open(){document.getElementById('app').hidden=false;if(!isStaff)return view('card')}async function view(name){try{let paths={card:'/api/member/card',profile:'/api/member/profile',coupons:'/api/member/coupons',stamps:'/api/member/stamps/history',rewards:'/api/member/rewards/history'};let data=await api(paths[name]);let node=document.getElementById('content');node.innerHTML='';if(name==='card'){let image=document.createElement('img');image.src=data.qrCode;image.alt='Member QR';node.append(image)}let pre=document.createElement('pre');pre.textContent=JSON.stringify(data,null,2);node.append(pre)}catch(e){show(e.message)}}document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));if(isStaff){document.getElementById('signIn').onclick=async()=>{try{let data=await api('/api/auth/staff-login',{method:'POST',headers:{},body:JSON.stringify({username:username.value,password:password.value})});token=data.token;localStorage.setItem('gcStaffToken',token);login.hidden=true;open()}catch(e){show(e.message)}};document.getElementById('addStamp').onclick=async()=>{try{let scan=await api('/api/stamp/scan',{method:'POST',body:JSON.stringify({qrToken:memberToken.value.trim()})});let result=await api('/api/stamp/add',{method:'POST',body:JSON.stringify({memberUid:scan.member_uid,drinkQuantity:Number(quantity.value),idempotencyKey:crypto.randomUUID()})});show(result)}catch(e){show(e.message)}};document.getElementById('redeem').onclick=async()=>{try{let coupon=await api('/api/coupon/resolve',{method:'POST',body:JSON.stringify({qrToken:couponToken.value.trim()})});show(await api('/api/coupon/redeem',{method:'POST',body:JSON.stringify({code:coupon.code})}))}catch(e){show(e.message)}};if(token){login.hidden=true;open()}}else{(async()=>{try{await liff.init({liffId:'${liffId}'});if(!liff.isLoggedIn()){liff.login();return}let data=await api('/api/auth/line-login',{method:'POST',headers:{},body:JSON.stringify({idToken:liff.getIDToken()})});token=data.token;localStorage.setItem('gcMemberToken',token);status.hidden=true;open()}catch(e){status.textContent=e.message}})()}</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>${title}</title><style>
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#faf7f3 0%,#f5f0e8 100%);color:#3e2723;margin:0;padding:0;min-height:100vh}
+.container{max-width:480px;margin:0 auto;padding:1rem}
+h1{font-size:1.5rem;text-align:center;margin:0 0 1rem;padding:1rem 0;border-bottom:2px solid #5b3a29;background:#fff}
+button{background:#5b3a29;color:#fff;border:0;border-radius:.5rem;padding:.75rem 1rem;font-size:1rem;cursor:pointer;width:100%;margin:.5rem 0;transition:all .2s}
+button:disabled{background:#ccc;cursor:not-allowed}
+button.secondary{background:#8d6e63}
+button.danger{background:#d32f2f}
+button.success{background:#388e3c}
+button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 12px rgba(91,58,41,0.3)}
+input,select,textarea{font:inherit;padding:.75rem;margin:.5rem 0;border:1px solid #d7ccc8;border-radius:.5rem;width:100%;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#5b3a29;box-shadow:0 0 0 3px rgba(91,58,41,0.1)}
+.loading{text-align:center;padding:2rem;color:#8d6e63}
+.error{background:#ffebee;color:#c62828;padding:1rem;border-radius:.5rem;margin:1rem 0;border-left:4px solid #c62828}
+.success{background:#e8f5e9;color:#2e7d32;padding:1rem;border-radius:.5rem;margin:1rem 0;border-left:4px solid #2e7d32}
+.hidden{display:none!important}
+nav{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;background:#fff;padding:1rem;border-radius:.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+nav button{flex:1;min-width:calc(50% - .25rem);padding:.5rem;font-size:.9rem}
+.card{background:#fff;border-radius:.75rem;box-shadow:0 2px 12px rgba(0,0,0,0.1);margin:1rem 0;overflow:hidden}
+.card-header{background:linear-gradient(135deg,#5b3a29 0%,#8d6e63 100%);color:#fff;padding:1.5rem;text-align:center}
+.card-header img{width:80px;height:80px;border-radius:50%;border:3px solid #fff;margin-bottom:.5rem}
+.card-body{padding:1.5rem}
+.stamp-progress{margin:1rem 0}
+.stamp-bar{background:#e0e0e0;height:1.5rem;border-radius:1rem;overflow:hidden}
+.stamp-fill{background:linear-gradient(90deg,#ff6f00 0%,#ff8f00 100%);height:100%;transition:width .5s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:.8rem}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1rem 0}
+.stat{background:#faf7f3;padding:1rem;border-radius:.5rem;text-align:center}
+.stat-value{font-size:2rem;font-weight:bold;color:#5b3a29}
+.stat-label{font-size:.8rem;color:#8d6e63;margin-top:.25rem}
+.qr-container{text-align:center;padding:1rem;background:#fff;border-radius:.5rem;margin:1rem 0}
+.qr-container img{max-width:100%;height:auto}
+.coupon-card{background:#fff;border-radius:.75rem;overflow:hidden;margin:.5rem 0;box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all .2s}
+.coupon-card.unused{cursor:pointer}
+.coupon-card.unused:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,0.15)}
+.coupon-header{background:linear-gradient(135deg,#ff6f00 0%,#ff8f00 100%);color:#fff;padding:1rem}
+.coupon-header.used,.coupon-header.expired,.coupon-header.cancelled{background:#bdbdbd}
+.coupon-body{padding:1rem}
+.coupon-title{font-weight:bold;margin-bottom:.5rem}
+.coupon-meta{font-size:.85rem;color:#6d4c41}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:1rem;z-index:1000}
+.modal-content{background:#fff;border-radius:.75rem;max-width:400px;width:100%;max-height:90vh;overflow-y:auto}
+.modal-header{background:linear-gradient(135deg,#5b3a29 0%,#8d6e63 100%);color:#fff;padding:1rem}
+.modal-body{padding:1.5rem}
+.banner{position:fixed;top:0;left:0;right:0;background:#ff6f00;color:#fff;padding:1rem;text-align:center;z-index:999;animation:slideDown .3s ease}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;margin-bottom:.25rem;font-weight:500}
+.login-form{max-width:320px;margin:2rem auto;padding:2rem;background:#fff;border-radius:.75rem;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
+.empty-state{text-align:center;padding:3rem 1rem;color:#8d6e63}
+.empty-state svg{width:80px;height:80px;margin-bottom:1rem;opacity:.5}
+</style></head><body>
+<h1>${title}</h1>
+<div class="container">
+<section id="login" class="login-form">${staff ? '<h2>Staff Sign In</h2><div class="form-group"><label>Username</label><input id="username" placeholder="Enter username"></div><div class="form-group"><label>Password</label><input id="password" type="password" placeholder="Enter password"></div><button id="signInBtn">Sign In</button><p id="loginError" class="error hidden"></p>' : '<p id="status">Connecting to LINE…</p>'}</section>
+<main id="app" class="hidden">
+${staff ? '<section id="staffSection"><nav><button onclick="showStampFlow()">Add Stamp</button><button onclick="showRedeemFlow()">Redeem Coupon</button><button onclick="logout()">Logout</button></nav><div id="stampFlow" class="hidden"><h2>Add Stamp</h2><textarea id="memberToken" placeholder="Scan or paste member QR token"></textarea><button id="scanMemberBtn">Scan Member</button><div id="memberPreview" class="hidden card"><div class="card-header"><img id="memberAvatar" src="" alt="Avatar"><div id="memberName"></div></div><div class="card-body"><div id="memberInfo"></div></div></div><div id="stampForm" class="hidden"><div class="form-group"><label>Drink Quantity</label><input id="quantity" type="number" min="1" max="50" value="1"></div><button id="confirmStampBtn" class="success">Confirm & Add Stamp</button></div></div><div id="redeemFlow" class="hidden"><h2>Redeem Coupon</h2><textarea id="couponToken" placeholder="Scan or paste coupon QR token"></textarea><button id="scanCouponBtn">Scan Coupon</button><div id="couponPreview" class="hidden card"><div class="card-header" id="couponHeader"><h3 id="couponTitle"></h3></div><div class="card-body"><p id="couponDescription"></p><p id="couponExpiry"></p><p id="couponCode"></p></div></div><button id="confirmRedeemBtn" class="success hidden">Confirm & Redeem</button></div><div id="resultBanner"></div></section>' : '<nav><button data-view="card">Member Card</button><button data-view="profile">Profile</button><button data-view="coupons">Coupons</button><button data-view="stamps">Stamp History</button><button data-view="rewards">Reward History</button><button onclick="logout()">Logout</button></nav><section id="content"></section><div id="modal" class="hidden"><div class="modal-content"><div class="modal-header"><button onclick="closeModal()" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.2);width:2rem;height:2rem;border-radius:50%;border:0;color:#fff;cursor:pointer">×</button><h3 id="modalTitle"></h3></div><div class="modal-body" id="modalBody"></div></div></div>'}
+</main>
+</div>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+const isStaff=${staff};
+let token=localStorage.getItem(isStaff?'gcStaffToken':'gcMemberToken')||'';
+let idempotencyKey=null;
+let currentCoupon=null;
+
+function showLoading(msg='Loading…'){return '<div class="loading">'+msg+'</div>'}
+function showError(msg){return '<div class="error">⚠️ '+msg+'</div>'}
+function showSuccess(msg){return '<div class="success">✓ '+msg+'</div>'}
+
+async function api(path,opt={}){try{let r=await fetch(path,{...opt,headers:{...(opt.headers||{}),'Content-Type':'application/json',Authorization:'Bearer '+token}});let j=await r.json();if(!j.success)throw Error(j.message);return j.data}catch(e){if(e.message.includes('401')||e.message.includes('Session')){await logout();throw e}throw e}}
+
+async function validateSession(){try{let path=isStaff?'/api/auth/staff-session':'/api/auth/session';await api(path);return true}catch(e){return false}}
+
+async function logout(){localStorage.removeItem(isStaff?'gcStaffToken':'gcMemberToken');token='';location.reload()}
+
+async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(!isStaff)view('card')}
+
+function formatCurrency(num){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(num||0)}
+function formatDate(date){return new Date(date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
+function formatDateTime(date){return new Date(date).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+
+function renderMemberCard(data){
+  const progress=(data.current_stamps/10)*100;
+  return '<div class="card"><div class="card-header">'+(data.picture_url?'<img src="'+data.picture_url+'" alt="'+data.display_name+'">':'')+'<h2>'+data.display_name+'</h2></div><div class="card-body"><div class="stats"><div class="stat"><div class="stat-value">'+data.current_stamps+'</div><div class="stat-label">Current Stamps</div></div><div class="stat"><div class="stat-value">'+data.total_stamps_earned+'</div><div class="stat-label">Total Earned</div></div><div class="stat"><div class="stat-value">'+data.points+'</div><div class="stat-label">Points</div></div><div class="stat"><div class="stat-value">'+Math.floor(data.current_stamps/10)+'</div><div class="stat-label">Rewards Available</div></div></div><div class="stamp-progress"><div class="stamp-bar"><div class="stamp-fill" style="width:'+progress+'%">'+data.current_stamps+'/10 stamps</div></div></div><p style="font-size:.85rem;color:#8d6e63;margin:1rem 0">Member since: '+formatDate(data.created_at)+'<br>Member UID: '+data.member_uid+'</p><div class="qr-container"><h3>Your Member QR</h3><img src="'+data.qrCode+'" alt="Member QR Code"></div></div></div>'}
+
+function renderProfile(data){
+  return '<div class="card"><div class="card-header"><h2>Profile</h2></div><div class="card-body"><form id="profileForm"><div class="form-group"><label>Display Name</label><input value="'+data.display_name+'" disabled></div><div class="form-group"><label>Phone</label><input id="phone" type="tel" value="'+(data.phone||'')+'" placeholder="Enter phone number"></div><div class="form-group"><label>Birthday</label><input id="birthday" type="date" value="'+(data.birthday||'')+'"></div><button type="submit" id="saveProfileBtn">Save Changes</button></form><p id="profileMessage"></p></div></div>'}
+
+function renderCoupons(data){
+  if(!data||data.length===0)return '<div class="empty-state"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.996 2.996 0 0 0-5.5-1.65A2.996 2.996 0 0 0 7 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4V8h16v11z"/></svg><h3>No Coupons Yet</h3><p>Collect 10 stamps to get your first reward coupon!</p></div>';
+  return data.map(function(c){return '<div class="coupon-card '+c.status+'"'+(c.status==='unused'?' data-code="'+c.code+'"':'')+'><div class="coupon-header '+c.status+'"><h3>'+c.title+'</h3><small>'+c.type.toUpperCase()+'</small></div><div class="coupon-body"><div class="coupon-title">'+(c.description||'')+'</div><div class="coupon-meta">Status: '+c.status.toUpperCase()+'<br>Expires: '+formatDate(c.expires_at)+'<br>Code: '+c.code+'</div></div></div>'}).join('')}
+
+function renderStampHistory(data){
+  if(!data||data.length===0)return '<div class="empty-state"><h3>No Stamp History</h3><p>Start collecting stamps today!</p></div>';
+  return '<div class="card"><div class="card-body">'+data.map(s=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>+'+s.quantity+' stamps</strong><br><small>'+formatDateTime(s.created_at)+'</small></div>').join('')+'</div></div>'}
+
+function renderRewardHistory(data){
+  if(!data||data.length===0)return '<div class="empty-state"><h3>No Reward History</h3><p>Redeem your first reward coupon!</p></div>';
+  return '<div class="card"><div class="card-body">'+data.map(r=>'<div style="border-bottom:1px solid #eee;padding:.75rem 0"><strong>'+r.coupon_title+'</strong><br><small>'+r.stamps_used+' stamps • '+formatDateTime(r.created_at)+'</small></div>').join('')+'</div></div>'}
+
+async function view(name){
+  const content=document.getElementById('content');
+  content.innerHTML=showLoading();
+  try{const paths={card:'/api/member/card',profile:'/api/member/profile',coupons:'/api/member/coupons',stamps:'/api/member/stamps/history',rewards:'/api/member/rewards/history'};
+    const data=await api(paths[name]);
+    const renderers={card:renderMemberCard,profile:renderProfile,coupons:renderCoupons,stamps:renderStampHistory,rewards:renderRewardHistory};
+    content.innerHTML=renderers[name](data);
+    if(name==='profile')setupProfileForm();
+    if(name==='coupons')setupCouponClickHandlers();
+  }catch(e){content.innerHTML=showError(e.message)}}
+
+async function showCouponQR(code){try{const data=await api('/api/member/coupons/'+code+'/qr');document.getElementById('modalTitle').textContent=data.title;document.getElementById('modalBody').innerHTML='<div class="qr-container"><img src="'+data.qrCode+'" alt="Coupon QR"></div><div style="text-align:center"><p><strong>'+data.title+'</strong></p><p>'+data.description+'</p><p><small>Expires: '+formatDate(data.expires_at)+'</small></p><p><small>Code: '+data.code+'</small></p><p><small>Status: '+data.status.toUpperCase()+'</small></p></div>';document.getElementById('modal').classList.remove('hidden')}catch(e){alert('Failed to load coupon: '+e.message)}}
+
+function closeModal(){document.getElementById('modal').classList.add('hidden')}
+
+function setupCouponClickHandlers(){document.querySelectorAll('.coupon-card.unused').forEach(function(card){card.addEventListener('click',function(){var code=this.getAttribute('data-code');if(code)showCouponQR(code)})})}
+
+async function setupProfileForm(){const form=document.getElementById('profileForm');const btn=document.getElementById('saveProfileBtn');const msg=document.getElementById('profileMessage');form.onsubmit=async e=>{e.preventDefault();btn.disabled=true;btn.textContent='Saving…';try{const phone=document.getElementById('phone').value.trim();const birthday=document.getElementById('birthday').value;await api('/api/member/profile',{method:'PUT',body:JSON.stringify({phone,birthday})});msg.className='success';msg.textContent='✓ Profile updated successfully!'}catch(e){msg.className='error';msg.textContent='⚠️ '+e.message}finally{btn.disabled=false;btn.textContent='Save Changes'}}}
+
+async function showStampFlow(){document.getElementById('stampFlow').classList.remove('hidden');document.getElementById('redeemFlow').classList.add('hidden')}
+
+async function showRedeemFlow(){document.getElementById('redeemFlow').classList.remove('hidden');document.getElementById('stampFlow').classList.add('hidden')}
+
+async function scanMember(){const btn=document.getElementById('scanMemberBtn');const token=document.getElementById('memberToken');try{btn.disabled=true;btn.textContent='Scanning…';const scan=await api('/api/stamp/scan',{method:'POST',body:JSON.stringify({qrToken:token.value.trim()})});document.getElementById('memberAvatar').src=scan.picture_url||'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%238d6e63" width="100" height="100"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="40">'+scan.display_name.charAt(0)+'</text></svg>';document.getElementById('memberName').textContent=scan.display_name;document.getElementById('memberInfo').innerHTML='<p><strong>Member UID:</strong> '+scan.member_uid+'</p><p><strong>Current Stamps:</strong> '+scan.current_stamps+'</p><p><strong>Total Earned:</strong> '+scan.total_stamps_earned+'</p>';document.getElementById('memberPreview').classList.remove('hidden');document.getElementById('stampForm').classList.remove('hidden');idempotencyKey=crypto.randomUUID();btn.disabled=false;btn.textContent='Scan Member'}catch(e){btn.disabled=false;btn.textContent='Scan Member';showResultBanner(e.message,'error')}}
+
+async function confirmStamp(){const btn=document.getElementById('confirmStampBtn');const token=document.getElementById('memberToken');try{btn.disabled=true;btn.textContent='Adding Stamp…';const scan=await api('/api/stamp/scan',{method:'POST',body:JSON.stringify({qrToken:token.value.trim()})});const result=await api('/api/stamp/add',{method:'POST',body:JSON.stringify({memberUid:scan.member_uid,drinkQuantity:Number(document.getElementById('quantity').value),idempotencyKey:idempotencyKey})});showResultBanner('✓ Added '+result.stamps_earned+' stamp(s). Stamps: '+result.new_stamp_count+'/'+10,'success');if(result.newCoupons&&result.newCoupons.length>0){const couponNames=result.newCoupons.map(c=>c.title).join(', ');setTimeout(()=>showResultBanner('🎉 Congratulations! You earned a reward coupon: '+couponNames,'success'),1500)}document.getElementById('memberToken').value='';document.getElementById('memberPreview').classList.add('hidden');document.getElementById('stampForm').classList.add('hidden');btn.disabled=false;btn.textContent='Confirm & Add Stamp';idempotencyKey=null}catch(e){btn.disabled=false;btn.textContent='Confirm & Add Stamp';showResultBanner(e.message,'error')}}
+
+async function scanCoupon(){const btn=document.getElementById('scanCouponBtn');const token=document.getElementById('couponToken');try{btn.disabled=true;btn.textContent='Scanning…';currentCoupon=await api('/api/coupon/resolve',{method:'POST',body:JSON.stringify({qrToken:token.value.trim()})});const statusClass=['unused','used','expired','cancelled'].includes(currentCoupon.status)?currentCoupon.status:'unused';document.getElementById('couponHeader').className='card-header '+statusClass;document.getElementById('couponTitle').textContent=currentCoupon.title;document.getElementById('couponDescription').textContent=currentCoupon.description||'';document.getElementById('couponExpiry').textContent='Expires: '+formatDate(currentCoupon.expires_at);document.getElementById('couponCode').textContent='Code: '+currentCoupon.code;if(currentCoupon.status==='unused'){document.getElementById('confirmRedeemBtn').classList.remove('hidden')}else{document.getElementById('confirmRedeemBtn').classList.add('hidden');showResultBanner('This coupon cannot be redeemed (status: '+currentCoupon.status+')','error')}document.getElementById('couponPreview').classList.remove('hidden');btn.disabled=false;btn.textContent='Scan Coupon'}catch(e){btn.disabled=false;btn.textContent='Scan Coupon';showResultBanner(e.message,'error')}}
+
+async function confirmRedeem(){const btn=document.getElementById('confirmRedeemBtn');try{btn.disabled=true;btn.textContent='Redeeming…';const result=await api('/api/coupon/redeem',{method:'POST',body:JSON.stringify({code:currentCoupon.code})});showResultBanner('✓ Coupon redeemed successfully!','success');document.getElementById('couponToken').value='';document.getElementById('couponPreview').classList.add('hidden');document.getElementById('confirmRedeemBtn').classList.add('hidden');btn.disabled=false;btn.textContent='Confirm & Redeem';currentCoupon=null}catch(e){btn.disabled=false;btn.textContent='Confirm & Redeem';showResultBanner(e.message,'error')}}
+
+function showResultBanner(msg,type){const banner=document.getElementById('resultBanner');banner.innerHTML='<div class="banner" style="background:'+((type==='success')?'#2e7d32':'#c62828')+'">'+msg+'</div>';setTimeout(()=>{banner.innerHTML=''},5000)}
+
+if(isStaff){document.getElementById('signInBtn').onclick=async()=>{const btn=document.getElementById('signInBtn');const err=document.getElementById('loginError');try{btn.disabled=true;btn.textContent='Signing in…';err.classList.add('hidden');const data=await api('/api/auth/staff-login',{method:'POST',headers:{},body:JSON.stringify({username:document.getElementById('username').value,password:document.getElementById('password').value})});token=data.token;localStorage.setItem('gcStaffToken',token);if(await validateSession()){open()}else{throw Error('Session validation failed')}}catch(e){err.textContent=e.message;err.classList.remove('hidden');btn.disabled=false;btn.textContent='Sign In'}};document.getElementById('scanMemberBtn').onclick=scanMember;document.getElementById('confirmStampBtn').onclick=confirmStamp;document.getElementById('scanCouponBtn').onclick=scanCoupon;document.getElementById('confirmRedeemBtn').onclick=confirmRedeem;if(token)validateSession().then(valid=>valid?open():logout())}else{(async()=>{try{await liff.init({liffId:'${liffId}'});if(!liff.isLoggedIn()){liff.login();return}const data=await api('/api/auth/line-login',{method:'POST',headers:{},body:JSON.stringify({idToken:liff.getIDToken()})});token=data.token;localStorage.setItem('gcMemberToken',token);if(await validateSession()){open()}else{throw Error('Session validation failed')}}catch(e){document.getElementById('status').textContent=e.message}})()}
+</script></body></html>`;
 }
 module.exports = { memberLiffPage: (liffId) => page({ title: 'Grandfa Cafe Membership', liffId }), staffLiffPage: (liffId) => page({ title: 'Grandfa Cafe Staff', liffId, staff: true }) };
