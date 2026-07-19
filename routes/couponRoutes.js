@@ -26,9 +26,12 @@ router.post(
 
 router.post(
   '/redeem',
-  validate([body('code').isString().notEmpty().withMessage('code is required')]),
+  validate([
+    body('code').isString().notEmpty().withMessage('code is required'),
+    body('sessionId').optional().isString().notEmpty(),
+  ]),
   asyncHandler(async (req, res) => {
-    const result = await redeemCoupon(req.body.code, req.staff.id);
+    const result = await redeemCoupon(req.body.code, req.staff.id, req.body.sessionId || null);
     return ok(res, result, 'Coupon redeemed');
   })
 );

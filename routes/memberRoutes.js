@@ -19,6 +19,7 @@ const { getProfile, updateProfile } = require('../services/membership/profileSer
 const { buildMemberCard } = require('../services/membership/memberCardService');
 const { getTransactionHistory, getRewardHistory } = require('../services/membership/historyService');
 const { listMemberCoupons, buildCouponQrToken } = require('../services/coupon/couponService');
+const { generateQrSession } = require('../services/coupon/qrSessionService');
 const AppError = require('../utils/AppError');
 const QRCode = require('qrcode');
 
@@ -89,6 +90,26 @@ router.get(
     });
 
     return ok(res, { qrCode: qrDataUrl, coupon });
+  })
+);
+
+// Generates a one-time QR session for secure redemption.
+// Session expires after a configurable time and can only be used once.
+router.post(
+  '/coupons/:code/qr-session',
+  validate([param('code').isString().notEmpty()]),
+  asyncHandler(async (req, res) => {
+    const coupons = await listMemberCoupons(req.member.id);
+    const coupon = coupons.find((c) => c.code === req.params.code);
+    if (!coupon) {
+      throw new AppError('Coupon not found', 404);
+    }
+    if (coupon.status !== 'unused') {
+      throw new AppError(`This coupon is ${coupon.status} and cannot be shown for redemption`, 400);
+    }
+
+    const session = await generateQrSession(req.member.id, coupon.id, coupon.code);
+    return ok(res, { ...session, coupon });
   })
 );
 

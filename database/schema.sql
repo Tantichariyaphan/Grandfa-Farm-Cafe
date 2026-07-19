@@ -121,6 +121,27 @@ CREATE TABLE IF NOT EXISTS chat_keywords (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS coupon_redemptions (
+  id BIGSERIAL PRIMARY KEY,
+  coupon_id BIGINT NOT NULL UNIQUE REFERENCES coupons(id),
+  staff_id BIGINT NOT NULL REFERENCES staff(id),
+  redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  qr_session_id VARCHAR(128)
+);
+
+CREATE TABLE IF NOT EXISTS coupon_qr_sessions (
+  id VARCHAR(128) PRIMARY KEY,
+  coupon_id BIGINT NOT NULL REFERENCES coupons(id),
+  member_id BIGINT NOT NULL REFERENCES members(id),
+  qr_token TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (used_at IS NULL OR expires_at > created_at)
+);
+CREATE INDEX IF NOT EXISTS idx_qr_sessions_coupon ON coupon_qr_sessions(coupon_id) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_qr_sessions_member ON coupon_qr_sessions(member_id, created_at DESC);
+
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS staff_updated_at ON staff;
 CREATE TRIGGER staff_updated_at BEFORE UPDATE ON staff FOR EACH ROW EXECUTE FUNCTION set_updated_at();

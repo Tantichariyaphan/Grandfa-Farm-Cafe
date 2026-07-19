@@ -8,6 +8,7 @@
 const { query, withTransaction } = require('../../database/db');
 const { generateCouponCode } = require('../../utils/couponCode');
 const { verify: verifyQrToken, signCouponToken } = require('../../utils/qrToken');
+const { validateQrSession, markSessionUsed } = require('./qrSessionService');
 const AppError = require('../../utils/AppError');
 const config = require('../../config');
 
@@ -118,9 +119,40 @@ async function resolveCouponFromToken(qrTokenString) {
  *
  * @param {string} couponCode
  * @param {number} staffId
+ * @param {string} [sessionId] - QR session ID for validation
  */
-async function redeemCoupon(couponCode, staffId) {
+async function redeemCoupon(couponCode, staffId, sessionId = null) {
   return withTransaction(async (client) => {
+    // Validate QR session if provided
+    let sessionData = null;
+    if (sessionId) {
+      try {
+        const result = await client.query(
+          `SELECT s.id, s.coupon_id, s.member_id, s.expires_at, s.used_at, c.code
+           FROM coupon_qr_sessions s
+           JOIN coupons c ON c.id = s.coupon_id
+           WHERE s.id = $1 AND c.code = $2`,
+          [sessionId, couponCode]
+        );
+
+        sessionData = result.rows[0];
+        if (!sessionData) {
+          throw new AppError('Invalid QR session', 400);
+        }
+
+        if (sessionData.used_at) {
+          throw new AppError('This QR code has already been used', 409);
+        }
+
+        if (new Date(sessionData.expires_at) < new Date()) {
+          throw new AppError('This QR code has expired', 410);
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError('QR session validation failed', 400);
+      }
+    }
+
     const result = await client.query(
       `SELECT id, code, member_id, type, status, title, expires_at, used_at
        FROM coupons WHERE code = $1 FOR UPDATE`,
@@ -152,11 +184,19 @@ async function redeemCoupon(couponCode, staffId) {
       [coupon.id]
     );
 
+    // Mark QR session as used if provided
+    if (sessionId) {
+      await client.query(
+        `UPDATE coupon_qr_sessions SET used_at = NOW() WHERE id = $1`,
+        [sessionId]
+      );
+    }
+
     // Unique constraint on coupon_redemptions.coupon_id guarantees a
     // coupon can only ever be logged as redeemed once, even under race.
     await client.query(
-      `INSERT INTO coupon_redemptions (coupon_id, staff_id) VALUES ($1, $2)`,
-      [coupon.id, staffId]
+      `INSERT INTO coupon_redemptions (coupon_id, staff_id, qr_session_id) VALUES ($1, $2, $3)`,
+      [coupon.id, staffId, sessionId]
     );
 
     const memberResult = await client.query(

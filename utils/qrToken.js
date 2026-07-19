@@ -8,7 +8,7 @@
 // for the member QR.
 //
 // Token format: base64url(payload).base64url(hmacHex)
-// payload = JSON { t: 'member' | 'coupon', id: <uid or code>, iat: <ms> }
+// payload = JSON { t: 'member' | 'coupon', id: <uid or code>, iat: <ms>, exp?: <ms>, sid?: <sessionId> }
 
 const crypto = require('crypto');
 const config = require('../config');
@@ -28,7 +28,7 @@ function sign(payloadObj) {
 
 /**
  * Verify a signed QR token. Returns the decoded payload object if valid,
- * or null if the token is malformed or the signature does not match.
+ * or null if the token is malformed, signature doesn't match, or expired.
  */
 function verify(token) {
   if (typeof token !== 'string' || !token.includes('.')) return null;
@@ -45,10 +45,17 @@ function verify(token) {
   const providedBuf = Buffer.from(providedHmac);
 
   if (expectedBuf.length !== providedBuf.length) return null;
-  if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) return null;
+  if (!crypto.timingSafeEqual(expectedBuf, providedHmac)) return null;
 
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+
+    // Check expiration if present
+    if (decoded.exp && Date.now() > decoded.exp) {
+      return null;
+    }
+
+    return decoded;
   } catch {
     return null;
   }
@@ -58,8 +65,28 @@ function signMemberToken(memberUid) {
   return sign({ t: 'member', id: memberUid, iat: Date.now() });
 }
 
-function signCouponToken(couponCode) {
-  return sign({ t: 'coupon', id: couponCode, iat: Date.now() });
+function signCouponToken(couponCode, expiresInMinutes = null) {
+  const payload = { t: 'coupon', id: couponCode, iat: Date.now() };
+  if (expiresInMinutes) {
+    payload.exp = Date.now() + expiresInMinutes * 60 * 1000;
+  }
+  return sign(payload);
 }
 
-module.exports = { sign, verify, signMemberToken, signCouponToken };
+function signCouponSessionToken(sessionId, couponCode, expiresInMinutes) {
+  return sign({
+    t: 'coupon',
+    id: couponCode,
+    sid: sessionId,
+    iat: Date.now(),
+    exp: Date.now() + expiresInMinutes * 60 * 1000
+  });
+}
+
+module.exports = {
+  sign,
+  verify,
+  signMemberToken,
+  signCouponToken,
+  signCouponSessionToken
+};

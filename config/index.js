@@ -86,4 +86,8 @@ module.exports = {
     stampsRequiredForReward: 10,
     couponExpiryDays: 90,
   },
+
+  qrSession: {
+    expiresInMinutes: parseInt(process.env.QR_SESSION_EXPIRY_MINUTES, 10) || 5,
+  },
 };
