@@ -4,6 +4,7 @@
 // personal data (see utils/qrToken.js for the security rationale).
 
 const QRCode = require('qrcode');
+const { query } = require('../../database/db');
 const { signMemberToken } = require('../../utils/qrToken');
 
 /**
@@ -26,6 +27,15 @@ async function generateMemberQrDataUrl(memberUid) {
  */
 async function buildMemberCard(member) {
   const qrDataUrl = await generateMemberQrDataUrl(member.member_uid);
+
+  const result = await query(
+    `SELECT COUNT(*)::int AS count FROM coupons
+     WHERE member_id = $1 AND status = 'unused' AND expires_at > NOW()`,
+    [member.id]
+  );
+
+  const availableRewards = result.rows[0].count;
+
   return {
     displayName: member.display_name,
     pictureUrl: member.picture_url,
@@ -34,6 +44,7 @@ async function buildMemberCard(member) {
     points: member.points,
     memberSince: member.created_at,
     qrCode: qrDataUrl,
+    availableRewards,
   };
 }
 
