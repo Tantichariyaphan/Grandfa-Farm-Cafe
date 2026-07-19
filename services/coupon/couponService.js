@@ -86,12 +86,37 @@ function defaultTitleForType(type) {
  * before confirming redemption. Does not trust QR expiry/status claims
  * - re-reads the live row from the database.
  *
+ * Validates QR session if present in token payload.
+ *
  * @param {string} qrTokenString
  */
 async function resolveCouponFromToken(qrTokenString) {
   const payload = verifyQrToken(qrTokenString);
   if (!payload || payload.t !== 'coupon') {
     throw new AppError('Invalid or unrecognized coupon QR code', 400);
+  }
+
+  // Validate QR session if present
+  if (payload.sid) {
+    const sessionResult = await query(
+      `SELECT id, coupon_id, member_id, expires_at, used_at
+       FROM coupon_qr_sessions
+       WHERE id = $1`,
+      [payload.sid]
+    );
+
+    const session = sessionResult.rows[0];
+    if (!session) {
+      throw new AppError('QR session not found. Please generate a new QR code.', 404);
+    }
+
+    if (session.used_at) {
+      throw new AppError('This QR code has already been used', 409);
+    }
+
+    if (new Date(session.expires_at) < new Date()) {
+      throw new AppError('This QR code has expired. Please generate a new one.', 410);
+    }
   }
 
   const result = await query(
@@ -107,6 +132,11 @@ async function resolveCouponFromToken(qrTokenString) {
   const coupon = result.rows[0];
   if (!coupon) {
     throw new AppError('Coupon not found', 404);
+  }
+
+  // Add sessionId to response if present
+  if (payload.sid) {
+    coupon.sessionId = payload.sid;
   }
 
   return coupon;

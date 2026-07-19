@@ -154,7 +154,13 @@ async function addStamp({ memberUid, staffId, drinkQuantity, idempotencyKey = nu
     await notifyRewardEarned(outcome.member, coupon);
   }
 
-  return outcome;
+  return {
+    stamps_earned: outcome.stampsAdded,
+    new_stamp_count: outcome.member.current_stamps,
+    total_stamps_earned: outcome.member.total_stamps_earned,
+    newCoupons: outcome.newCoupons,
+    member: outcome.member,
+  };
 }
 
 module.exports = { scanMember, addStamp };
