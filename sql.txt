@@ -1,0 +1,173 @@
+================================================================================
+          SQL CHEATSHEET & ANALYTICS FOR GRANDFA FARM CAFE SYSTEM
+================================================================================
+ไฟล์รวมคำสั่ง SQL สำคัญสำหรับบริหารจัดการระบบสมาชิก บัตรสะสมแต้ม และคูปอง
+สามารถนำไปใช้รันใน SQL Editor ของ DBeaver เพื่อดูรายงานและวิเคราะห์ข้อมูลร้านค้า
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+[หมวดที่ 1: การวิเคราะห์พฤติกรรมลูกค้าและระดับสมาชิก (Member Insights)]
+--------------------------------------------------------------------------------
+
+-- 1.1 แบ่งกลุ่มระดับลูกค้าตามจำนวนสแตมป์ที่เคยสะสมได้ทั้งหมด (Lifetime Stamp Tier)
+-- วัตถุประสงค์: ใช้ดูว่าลูกค้าคนไหนเป็นลูกค้าประจำ (Loyal Customer) โดยแบ่งเป็นกลุ่ม Gold, Silver, Bronze
+SELECT 
+    id,
+    member_uid,
+    display_name,
+    phone,
+    total_stamps_earned,
+    CASE 
+        WHEN total_stamps_earned >= 100 THEN '👑 Gold Member (ลูกค้า VIP)'
+        WHEN total_stamps_earned >= 50 THEN '⭐ Silver Member (ลูกค้าประจำ)'
+        ELSE '🌱 Bronze Member (ลูกค้าทั่วไป)'
+    END AS member_tier
+FROM members
+WHERE is_active = TRUE
+ORDER BY total_stamps_earned DESC;
+
+
+-- 1.2 ค้นหาลูกค้าที่เพิ่งบล็อก หรือยกเลิกการติดตาม LINE OA (Unfollowed Members)
+-- วัตถุประสงค์: ใช้ตรวจสอบอัตราการไหลออกของลูกค้า เพื่อนำไปปรับปรุงคอนเทนต์หรือโปรโมชั่น
+SELECT 
+    id,
+    display_name,
+    phone,
+    line_followed_at,
+    line_unfollowed_at,
+    (line_unfollowed_at - line_followed_at) AS duration_held
+FROM members
+WHERE line_unfollowed_at IS NOT NULL
+ORDER BY line_unfollowed_at DESC;
+
+
+-- 1.3 รายชื่อลูกค้าที่เกิดในเดือนปัจจุบัน (Birthday Marketing)
+-- วัตถุประสงค์: ดึงข้อมูลไปตรวจสอบสำหรับการแจกคูปองประเภท 'birthday' หรือส่งข้อความอวยพร
+SELECT 
+    id,
+    display_name,
+    phone,
+    birthday,
+    current_stamps,
+    points
+FROM members
+WHERE birthday IS NOT NULL 
+  AND is_active = TRUE
+  AND EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM NOW())
+ORDER BY EXTRACT(DAY FROM birthday) ASC;
+
+
+--------------------------------------------------------------------------------
+[หมวดที่ 2: ระบบสแตมป์และการทำธุรกรรมหน้าร้าน (Stamps & Transactions)]
+--------------------------------------------------------------------------------
+
+-- 2.1 ตรวจสอบประวัติการแจกสแตมป์และพฤติกรรมการซื้อล่าสุดของลูกค้า
+-- วัตถุประสงค์: ดูว่าลูกค้ามาใช้บริการวันไหน สั่งเครื่องดื่มไปกี่แก้ว และได้สแตมป์ไปเท่าไหร่
+SELECT 
+    t.id AS transaction_id,
+    m.display_name AS member_name,
+    s.display_name AS staff_name,
+    t.drink_quantity,
+    t.stamps_earned,
+    t.created_at AS transaction_time
+FROM transactions t
+JOIN members m ON t.member_id = m.id
+JOIN staff s ON t.staff_id = s.id
+ORDER BY t.created_at DESC
+LIMIT 100;
+
+
+-- 2.2 สรุปผลงานพนักงานหน้าร้าน (Staff Performance)
+-- วัตถุประสงค์: ดูว่าพนักงานคนไหนทำรายการหน้าร้านมากที่สุด และช่วยแจกแต้มกระตุ้นยอดขายเท่าไหร่
+SELECT 
+    s.id AS staff_id,
+    s.display_name AS staff_name,
+    s.role,
+    COUNT(t.id) AS total_transactions,
+    SUM(t.drink_quantity) AS total_drinks_sold,
+    SUM(t.stamps_earned) AS total_stamps_given
+FROM transactions t
+JOIN staff s ON t.staff_id = s.id
+GROUP BY s.id, s.display_name, s.role
+ORDER BY total_drinks_sold DESC;
+
+
+--------------------------------------------------------------------------------
+[หมวดที่ 3: การบริหารจัดการคูปองและการจัดแคมเปญ (Coupons & Promotions)]
+--------------------------------------------------------------------------------
+
+-- 3.1 คัดสถิติแคมเปญโปรโมชั่นที่มีการนำคูปองมาใช้จริงมากที่สุด (Campaign Success Rate)
+-- วัตถุประสงค์: ประเมินว่าโปรโมชั่นประเภทไหน (เช่น reward, welcome, holiday) ประสบความสำเร็จสูงสุด
+SELECT 
+    p.id AS promotion_id,
+    p.title AS promotion_title,
+    p.coupon_type,
+    COUNT(c.id) AS total_issued,
+    COUNT(CASE WHEN c.status = 'used' THEN 1 END) AS total_redeemed,
+    ROUND(COUNT(CASE WHEN c.status = 'used' THEN 1 END) * 100.0 / NULLIF(COUNT(c.id), 0), 2) AS redemption_rate_percent
+FROM promotions p
+LEFT JOIN coupons c ON p.id = c.promotion_id
+GROUP BY p.id, p.title, p.coupon_type
+ORDER BY total_redeemed DESC;
+
+
+-- 3.2 แจ้งเตือนคูปองที่ลูกค้ายังไม่ได้ใช้ และกำลังจะหมดอายุภายใน 7 วันข้างหน้า
+-- วัตถุประสงค์: ใช้ดึงข้อมูลเพื่อทำกิจกรรมยิงข้อความแจ้งเตือน (Push Notification) ไปกระตุ้นให้ลูกค้ากลับมาใช้สิทธิ์
+SELECT 
+    c.code AS coupon_code,
+    m.display_name AS member_name,
+    m.line_user_id,
+    c.title AS coupon_title,
+    c.expires_at
+FROM coupons c
+JOIN members m ON c.member_id = m.id
+WHERE c.status = 'unused'
+  AND c.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+ORDER BY c.expires_at ASC;
+
+
+-- 3.3 รายงานการสแกนแลกรับของรางวัลหน้าร้านที่เสร็จสมบูรณ์ (Coupon Redemptions History)
+-- วัตถุประสงค์: ตรวจสอบความโปร่งใส ป้องกันการทุจริตในการแลกคูปอง โดยดูว่าพนักงานคนไหนเป็นคนสแกนรับ
+SELECT 
+    cr.id AS redemption_id,
+    c.code AS coupon_code,
+    c.title AS coupon_title,
+    m.display_name AS member_name,
+    s.display_name AS staff_name,
+    cr.redeemed_at
+FROM coupon_redemptions cr
+JOIN coupons c ON cr.coupon_id = c.id
+JOIN members m ON c.member_id = m.id
+JOIN staff s ON cr.staff_id = s.id
+ORDER BY cr.redeemed_at DESC;
+
+
+--------------------------------------------------------------------------------
+[หมวดที่ 4: การตรวจสอบระบบและการส่งข้อความ (System Health & Logs)]
+--------------------------------------------------------------------------------
+
+-- 4.1 ตรวจสอบความผิดพลาดในการส่งข้อความบรอดแคสต์หรือแจ้งเตือน (Failed Notifications Log)
+-- วัตถุประสงค์: ค้นหาว่ามีข้อความไหนที่ส่งหาลูกค้าไม่ผ่าน พร้อมดูสาเหตุเพื่อส่งซ่อมแซมระบบบอท
+SELECT 
+    id,
+    member_id,
+    channel,
+    type,
+    error_message,
+    failed_at
+FROM notifications
+WHERE failed_at IS NOT NULL
+ORDER BY failed_at DESC;
+
+
+-- 4.2 ตรวจสอบ Keyword ยอดนิยมที่ระบบแชทบอทตอบกลับบ่อยที่สุด (Chatbot Usage)
+-- วัตถุประสงค์: เช็คว่าลูกค้าสนใจพิมพ์ถามคำไหนมากที่สุด เพื่อนำมาปรับปรุง Response Text ให้ตรงใจลูกค้า
+SELECT 
+    keyword,
+    response_text,
+    is_active,
+    updated_at
+FROM chat_keywords
+WHERE is_active = TRUE
+ORDER BY updated_at DESC;
+================================================================================

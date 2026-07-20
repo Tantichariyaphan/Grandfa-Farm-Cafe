@@ -28,6 +28,7 @@ app.use('/api/staff', require('./routes/staffRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/line', require('./routes/lineAdminRoutes'));
 app.use('/api/maintenance', require('./routes/maintenanceRoutes'));
+app.use('/api/knowledge', require('./routes/knowledgeRoutes'));
 app.get('/dashboard', (req, res) => res.type('html').send(dashboardPage()));
 app.get('/liff/member', (req, res) => res.type('html').send(memberLiffPage(config.liff.memberId)));
 app.get('/liff/staff', (req, res) => res.type('html').send(staffLiffPage(config.liff.staffId)));

@@ -1,8 +1,14 @@
 // services/chatbot/keywordReplies.js
-// Declarative keyword -> handler map for the auto-reply system.
-// To add a new keyword, add one entry here - no other file needs to
-// change. Each handler receives (member, context) and returns a LINE
-// message object or array of message objects.
+// Database-driven auto-reply system. Keyword lookups come from the
+// `chat_keywords` table instead of a hardcoded list. Adding, editing,
+// or disabling a keyword is now a data change (chat_keywords row),
+// not a code change - no other file needs to change.
+//
+// Flow: message -> matchKeyword() -> chat_keywords -> response_type
+//   -> response_target -> settings (for 'knowledge') -> reply
+//
+// Flex builders are preserved (imported from ../line/flexMessage)
+// for use by the upcoming STEP 4 dynamic response_type handlers.
 
 const {
   buildMainMenuFlex,
@@ -13,132 +19,176 @@ const {
   buildQuickReply,
 } = require('../line/flexMessage');
 const { query } = require('../../database/db');
+const knowledgeService = require('../knowledge/knowledgeService');
+const { getProfile } = require('../membership/profileService');
 const { listMemberCoupons } = require('../coupon/couponService');
+const { listPromotions } = require('../coupon/promotionService');
 const config = require('../../config');
 
-async function getSettingsMap() {
-  const result = await query(`SELECT key, value FROM settings`);
-  const map = {};
-  for (const row of result.rows) {
-    map[row.key] = row.value;
-  }
-  return map;
-}
+// STEP 6 - Alias Mapping: map common user variations to canonical keyword targets
+const ALIAS_MAP = {
+  'ร้านเปิดกี่โมง': 'opening hours',
+  'เปิดกี่โมง': 'opening hours',
+  'เวลาเปิด': 'opening hours',
+  'โปรโมชั่น': 'latest promotions',
+  'โปร': 'latest promotions',
+  'คูปอง': 'member_coupons',
+  'แต้ม': 'member_points',
+  'คะแนน': 'member_points',
+  'สมาชิก': 'member_card',
+  'แสตมป์': 'member_stamps',
+};
 
-const KEYWORD_HANDLERS = [
-  {
-    keywords: ['menu', 'help', 'member menu'],
-    handle: async () => buildHelpMenuFlex(),
-  },
-  {
-    keywords: ['membership', 'member card', 'my card', 'stamps', 'stamp'],
-    handle: async (member) => {
-      if (!member) return textWithLoginPrompt();
+/**
+ * Handles dynamic response targets.
+ * @param {string} target - response target (e.g., 'member_card', 'member_points')
+ * @param {object|null} member - authenticated member object
+ * @returns {Promise<object|object[]>} message(s) to reply with
+ */
+async function handleDynamicResponse(target, member) {
+  // Member-specific targets require authentication
+  const memberTargets = ['member_card', 'member_points', 'member_stamps', 'member_coupons'];
+  if (memberTargets.includes(target) && !member) {
+    return {
+      type: 'text',
+      text: 'Please open the Grandfa Cafe menu below and tap "My Member Card" to log in first.',
+    };
+  }
+
+  switch (target) {
+    case 'member_card': {
+      const profile = await getProfile(member.id);
+      return {
+        type: 'text',
+        text: `👤 ${profile.display_name}\n📊 Stamps: ${profile.current_stamps}\n💰 Points: ${profile.points}\n📅 Member since: ${new Date(profile.created_at).toLocaleDateString()}`,
+      };
+    }
+
+    case 'member_points': {
+      const profile = await getProfile(member.id);
+      return {
+        type: 'text',
+        text: `💰 Your current points: ${profile.points}`,
+      };
+    }
+
+    case 'member_stamps': {
       return buildStampProgressFlex(member, config.loyalty.stampsRequiredForReward);
-    },
-  },
-  {
-    keywords: ['coupons', 'coupon', 'my coupons'],
-    handle: async (member) => {
-      if (!member) return textWithLoginPrompt();
+    }
+
+    case 'member_coupons': {
       const coupons = await listMemberCoupons(member.id, 'unused');
       if (coupons.length === 0) {
-        return { type: 'text', text: 'You have no active coupons right now. Keep collecting stamps!' };
+        return {
+          type: 'text',
+          text: 'You have no active coupons right now. Keep collecting stamps!',
+        };
       }
       return coupons.slice(0, 5).map((c) => buildCouponFlex(c));
-    },
-  },
-  {
-    keywords: ['store info', 'store information', 'info'],
-    handle: async () => buildStoreInfoFlex(await getSettingsMap()),
-  },
-  {
-    keywords: ['business hours', 'hours', 'opening hours'],
-    handle: async () => {
-      const settings = await getSettingsMap();
-      return { type: 'text', text: `🕒 Business Hours: ${settings.business_hours?.value || 'Not set'}` };
-    },
-  },
-  {
-    keywords: ['location', 'address', 'where'],
-    handle: async () => {
-      const settings = await getSettingsMap();
-      return { type: 'text', text: `📍 ${settings.location?.value || 'Not set'}` };
-    },
-  },
-  {
-    keywords: ['contact', 'contact us', 'phone'],
-    handle: async () => {
-      const settings = await getSettingsMap();
-      return { type: 'text', text: `📞 Contact us: ${settings.contact_phone?.value || 'Not set'}` };
-    },
-  },
-  {
-    keywords: ['promotion', 'promotions', 'deals'],
-    handle: async () => ({
-      type: 'text',
-      text: 'Check back here for our latest promotions, or open the app to see your personal coupons!',
-      quickReply: buildQuickReply([
-        { label: 'My Coupons', text: 'coupons' },
-        { label: 'Store Info', text: 'store info' },
-      ]),
-    }),
-  },
-];
+    }
 
-function textWithLoginPrompt() {
-  return {
-    type: 'text',
-    text: 'Please open the Grandfa Cafe menu below and tap "My Member Card" to log in first.',
-  };
+    case 'latest_promotions': {
+      const promotions = await listPromotions();
+      const activePromos = promotions.filter((p) => p.is_active);
+      if (activePromos.length === 0) {
+        return {
+          type: 'text',
+          text: 'No active promotions at the moment. Check back soon!',
+        };
+      }
+      return {
+        type: 'text',
+        text: `🎉 ${activePromos.length} active promotion(s):\n${activePromos.map((p) => `• ${p.title}`).join('\n')}`,
+      };
+    }
+
+    default:
+      return null;
+  }
 }
 
 /**
- * Normalize raw user input for keyword matching.
+ * Logs keyword matching attempts and results for debugging and analytics.
+ * @param {string} rawText - original user input
+ * @param {string|null} normalizedText - normalized text or null
+ * @param {string} matchStrategy - 'exact' | 'alias' | 'partial' | 'none'
+ * @param {string|null} matchedKeyword - the keyword that matched, or null
+ * @param {string|null} responseType - response_type from matched keyword, or null
+ */
+function logKeywordMatch(rawText, normalizedText, matchStrategy, matchedKeyword, responseType) {
+  const timestamp = new Date().toISOString();
+  console.info(
+    JSON.stringify({
+      timestamp,
+      rawText,
+      normalizedText,
+      matchStrategy,
+      matchedKeyword,
+      responseType,
+    })
+  );
+}
+
+/**
+ * Normalizes user input for consistent keyword matching.
  * @param {string} rawText
- * @returns {string} normalized text (trimmed, lowercase)
+ * @returns {string|null} normalized text or null if empty after normalization
  */
 function normalizeKeyword(rawText) {
-  return (rawText || '').trim().toLowerCase();
+  let normalized = (rawText || '').trim().toLowerCase();
+
+  // Collapse multiple spaces
+  normalized = normalized.replace(/\s+/g, ' ');
+
+  // Remove trailing punctuation
+  normalized = normalized.replace(/[?!.,]+$/, '');
+
+  // Remove Thai polite endings
+  normalized = normalized
+    .replace(/\s*ครับ\s*$/, '')
+    .replace(/\s*ค่ะ\s*$/, '')
+    .replace(/\s*คะ\s*$/, '')
+    .replace(/\s*นะ\s*$/, '');
+
+  // Remove English "please"
+  normalized = normalized.replace(/\s*please\s*/gi, ' ').trim();
+
+  // Collapse spaces again after removals
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized || null;
 }
 
 /**
- * Find an active keyword from the database with alias mapping support.
- * Applies alias mapping before database lookup.
- * @param {string} normalizedKeyword
- * @returns {Promise<object|null>} keyword row from database, or null if not found
+ * Looks up a single active keyword row by exact, case-insensitive match.
+ * @param {string} normalizedText - already trimmed + lowercased
+ * @returns {Promise<{ keyword: string, response_text: string, response_type: string, response_target: string|null, is_active: boolean } | null>}
  */
-async function findActiveKeyword(normalizedKeyword) {
-  if (!normalizedKeyword) return null;
-
-  // Alias mapping: map normalizedKeyword to canonical form if alias exists
-  const aliasMap = {
-    'help': 'menu',
-    'member menu': 'menu',
-    'member card': 'membership',
-    'my card': 'membership',
-    'stamp': 'stamps',
-    'coupon': 'coupons',
-    'my coupons': 'coupons',
-    'store information': 'store info',
-    'info': 'store info',
-    'hours': 'business hours',
-    'opening hours': 'business hours',
-    'address': 'location',
-    'where': 'location',
-    'contact us': 'contact',
-    'phone': 'contact',
-    'deals': 'promotion',
-  };
-
-  const canonicalKeyword = aliasMap[normalizedKeyword] || normalizedKeyword;
-
+async function findActiveKeyword(normalizedText) {
   const result = await query(
-    `SELECT * FROM chat_keywords WHERE keyword = $1 AND is_active = true LIMIT 1`,
-    [canonicalKeyword]
+    `SELECT keyword, response_text, response_type, response_target, is_active
+     FROM chat_keywords
+     WHERE is_active = TRUE AND LOWER(keyword) = $1
+     LIMIT 1`,
+    [normalizedText]
   );
+  return result.rows[0] || null;
+}
 
-  return result.rows.length > 0 ? result.rows[0] : null;
+/**
+ * STEP 8 - Partial Matching: searches for keywords that contain the normalized text.
+ * @param {string} normalizedText - already trimmed + lowercased
+ * @returns {Promise<{ keyword: string, response_text: string, response_type: string, response_target: string|null, is_active: boolean } | null>}
+ */
+async function findPartialKeyword(normalizedText) {
+  const result = await query(
+    `SELECT keyword, response_text, response_type, response_target, is_active
+     FROM chat_keywords
+     WHERE is_active = TRUE AND LOWER(keyword) LIKE LOWER('%'||$1||'%')
+     LIMIT 1`,
+    [normalizedText]
+  );
+  return result.rows[0] || null;
 }
 
 /**
@@ -147,13 +197,64 @@ async function findActiveKeyword(normalizedKeyword) {
  * @returns {Promise<object|object[]|null>} message(s) to reply with, or null if no keyword matched
  */
 async function matchKeyword(rawText, member) {
-  const normalized = (rawText || '').trim().toLowerCase();
-  for (const entry of KEYWORD_HANDLERS) {
-    if (entry.keywords.includes(normalized)) {
-      return entry.handle(member);
+  const normalized = normalizeKeyword(rawText);
+  if (!normalized) {
+    logKeywordMatch(rawText, null, 'none', null, null);
+    return null;
+  }
+
+  // STEP 7 - Priority Matching:
+  // 1. Try exact keyword match
+  let row = await findActiveKeyword(normalized);
+  let strategy = 'exact';
+
+  // 2. If not found, try alias mapping
+  if (!row) {
+    const aliasTarget = ALIAS_MAP[normalized];
+    if (aliasTarget) {
+      row = await findActiveKeyword(aliasTarget);
+      strategy = 'alias';
     }
   }
-  return null;
+
+  // 3. If not found, try partial match
+  if (!row) {
+    row = await findPartialKeyword(normalized);
+    strategy = 'partial';
+  }
+
+  // 4. No match
+  if (!row) {
+    logKeywordMatch(rawText, normalized, 'none', null, null);
+    return null;
+  }
+
+  switch (row.response_type) {
+    case 'text': {
+      logKeywordMatch(rawText, normalized, strategy, row.keyword, row.response_type);
+      return { type: 'text', text: row.response_text };
+    }
+
+    case 'knowledge': {
+      const entry = await knowledgeService.get(row.response_target);
+      if (!entry) {
+        logKeywordMatch(rawText, normalized, strategy, row.keyword, row.response_type);
+        return { type: 'text', text: 'Information is currently unavailable.' };
+      }
+      logKeywordMatch(rawText, normalized, strategy, row.keyword, row.response_type);
+      return { type: 'text', text: entry.value.content };
+    }
+
+    case 'dynamic': {
+      logKeywordMatch(rawText, normalized, strategy, row.keyword, row.response_type);
+      return handleDynamicResponse(row.response_target, member);
+    }
+
+    default: {
+      logKeywordMatch(rawText, normalized, strategy, row.keyword, row.response_type);
+      return null;
+    }
+  }
 }
 
-module.exports = { matchKeyword, buildMainMenuFlex, normalizeKeyword, findActiveKeyword };
+module.exports = { matchKeyword, buildMainMenuFlex, handleDynamicResponse, normalizeKeyword, logKeywordMatch };

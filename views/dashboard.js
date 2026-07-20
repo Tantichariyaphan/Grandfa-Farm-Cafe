@@ -36,6 +36,9 @@ input:focus{outline:none;border-color:#5b3a29;box-shadow:0 0 0 3px rgba(91,58,41
 <div class="top-nav"><h2>Dashboard</h2><div class="nav-buttons"><button id="refreshBtn">🔄 Refresh</button><button class="danger" onclick="logout()">Logout</button></div></div>
 <div id="stats" class="loading">Loading statistics…</div>
 <p id="result"></p>
+<div class="top-nav"><h2>Knowledge Center</h2><div class="nav-buttons"><button id="knowledgeRefreshBtn">🔄 Refresh</button></div></div>
+<div id="knowledgeList" class="loading">Loading knowledge…</div>
+<div id="knowledgeMessage"></div>
 </section>
 </div>
 <script>
@@ -64,11 +67,81 @@ return html}
 
 async function loadStats(){const stats=document.getElementById('stats');stats.innerHTML='<div class="loading">Loading statistics…</div>';try{const data=await api('/api/dashboard/statistics');stats.innerHTML=renderStats(data)}catch(e){stats.innerHTML='<div class="error">⚠️ Failed to load statistics: '+e.message+'<br><button onclick="loadStats()">Try Again</button></div>'}}
 
-async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');await loadStats()}
+const KNOWLEDGE_TEMPLATE=[
+  {category:'store',label:'Store',items:[
+    {key:'opening_hours',title:'Opening Hours'},
+    {key:'contact',title:'Contact'},
+    {key:'parking',title:'Parking'},
+    {key:'wifi',title:'WiFi'},
+    {key:'google_map',title:'Google Map'},
+    {key:'website',title:'Website'},
+    {key:'facebook',title:'Facebook'},
+    {key:'instagram',title:'Instagram'},
+  ]},
+  {category:'member',label:'Member',items:[
+    {key:'member_guide',title:'Member Guide'},
+    {key:'stamp_guide',title:'Stamp Guide'},
+    {key:'coupon_guide',title:'Coupon Guide'},
+  ]},
+  {category:'faq',label:'FAQ',items:[
+    {key:'faq',title:'FAQ'},
+  ]},
+  {category:'announcement',label:'Announcement',items:[
+    {key:'announcement',title:'Announcement'},
+  ]},
+];
+
+function mergeKnowledgeWithTemplate(apiEntries){
+  const byKey={};
+  (apiEntries||[]).forEach(e=>{byKey[e.key]=e.value||{}});
+  return KNOWLEDGE_TEMPLATE.map(group=>({
+    category:group.category,
+    label:group.label,
+    items:group.items.map((item,i)=>{
+      const stored=byKey[item.key]||{};
+      return{
+        key:item.key,
+        title:stored.title!==undefined?stored.title:item.title,
+        content:stored.content!==undefined?stored.content:'',
+        order:stored.order!==undefined?stored.order:(i+1),
+      }})
+  }))}
+
+function renderKnowledge(groups){if(!groups||groups.length===0)return '<div class="empty">No knowledge entries yet</div>';
+const esc=(s)=>String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');
+let html='';
+groups.forEach(group=>{
+  html+='<h3 style="color:#5b3a29;margin:1.5rem 0 .5rem">'+group.label+'</h3>';
+  html+='<div class="grid">';
+  group.items.forEach(item=>{
+    html+='<article class="stat-card">'
+      +'<div class="stat-label">🔑 '+item.key+'</div>'
+      +'<input id="kw-title-'+item.key+'" value="'+esc(item.title)+'" placeholder="Title">'
+      +'<input id="kw-content-'+item.key+'" value="'+esc(item.content)+'" placeholder="Content">'
+      +'<input id="kw-order-'+item.key+'" type="number" value="'+esc(item.order)+'" placeholder="Order">'
+      +'<button class="kw-save-btn" data-key="'+item.key+'" data-category="'+group.category+'">Save</button>'
+      +'</article>'});
+  html+='</div>'});
+return html}
+
+function setupKnowledgeSaveHandlers(){document.querySelectorAll('.kw-save-btn').forEach(function(btn){btn.addEventListener('click',function(){saveKnowledge(this.dataset.key,this.dataset.category)})})}
+
+async function loadKnowledge(){const el=document.getElementById('knowledgeList');el.innerHTML='<div class="loading">Loading knowledge…</div>';try{const data=await api('/api/knowledge');const groups=mergeKnowledgeWithTemplate(Array.isArray(data)?data:[]);el.innerHTML=renderKnowledge(groups);setupKnowledgeSaveHandlers()}catch(e){el.innerHTML='<div class="error">⚠️ Failed to load knowledge: '+e.message+'<br><button onclick="loadKnowledge()">Try Again</button></div>'}}
+
+async function saveKnowledge(key,category){const msg=document.getElementById('knowledgeMessage');msg.innerHTML='';
+const titleEl=document.getElementById('kw-title-'+key);
+const contentEl=document.getElementById('kw-content-'+key);
+const orderEl=document.getElementById('kw-order-'+key);
+const payload={title:titleEl.value.trim(),category:category,content:contentEl.value.trim()};
+if(orderEl.value!==''){payload.order=Number(orderEl.value)}
+try{await api('/api/knowledge/'+encodeURIComponent(key),{method:'PUT',body:JSON.stringify(payload)});msg.innerHTML='<div class="success">✓ Saved "'+key+'"</div>';await loadKnowledge()}catch(e){msg.innerHTML='<div class="error">⚠️ '+e.message+'</div>'}}
+
+async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');await loadStats();await loadKnowledge()}
 
 document.getElementById('signInBtn').onclick=async()=>{const btn=document.getElementById('signInBtn');const err=document.getElementById('loginError');try{btn.disabled=true;btn.textContent='Signing in…';err.classList.add('hidden');const data=await api('/api/auth/staff-login',{method:'POST',body:JSON.stringify({username:document.getElementById('username').value,password:document.getElementById('password').value})});token=data.token;localStorage.setItem('gcToken',token);if(await validateSession()){await open()}else{throw Error('Session validation failed')}}catch(e){err.textContent=e.message;err.classList.remove('hidden');btn.disabled=false;btn.textContent='Sign In'}};
 
 document.getElementById('refreshBtn').onclick=loadStats;
+document.getElementById('knowledgeRefreshBtn').onclick=loadKnowledge;
 
 if(token){validateSession().then(valid=>{if(valid){open()}else{logout()}})};
 </script></body></html>`;
