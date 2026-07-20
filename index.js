@@ -11,10 +11,12 @@ const { dashboardPage } = require('./views/dashboard');
 const { memberLiffPage, staffLiffPage } = require('./views/liff');
 
 const app = express();
+
 app.set('trust proxy', 1);
+
+app.use((req, res, next) => {console.log(`[REQUEST] ${req.method} ${req.originalUrl}`);next();});
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, credentials: false }));
-app.get('/health', (req, res) => ok(res, { status: 'ok', environment: config.env }, 'Healthy'));
+app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, credentials: false }));app.get('/health', (req, res) => ok(res, { status: 'ok', environment: config.env }, 'Healthy'));
 app.get('/ready', async (req, res, next) => { try { await pool.query('SELECT 1'); return ok(res, { database: 'connected' }, 'Ready'); } catch (error) { return next(error); } });
 app.use('/webhook', require('./routes/webhookRoutes'));
 app.use(express.json({ limit: '1mb' }));
