@@ -58,9 +58,78 @@ async function handleDynamicResponse(target, member) {
   switch (target) {
     case 'member_card': {
       const profile = await getProfile(member.id);
+      const availableRewards = Math.floor((profile.total_stamps_earned || 0) / (config.loyalty.stampsRequiredForReward || 10));
       return {
-        type: 'text',
-        text: `👤 ${profile.display_name}\n📊 Stamps: ${profile.current_stamps}\n💰 Points: ${profile.points}\n📅 Member since: ${new Date(profile.created_at).toLocaleDateString()}`,
+        type: 'flex',
+        altText: 'Your Digital Member Card',
+        contents: {
+          type: 'bubble',
+          header: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'text',
+                text: '👤 Digital Member Card',
+                weight: 'bold',
+                size: 'lg',
+                align: 'start',
+              },
+            ],
+          },
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: [
+              {
+                type: 'text',
+                text: profile.display_name || 'Member',
+                weight: 'bold',
+                size: 'xl',
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                contents: [
+                  { type: 'text', text: 'Points', color: '#666666', size: 'sm', flex: 0 },
+                  { type: 'text', text: String(profile.points || 0), weight: 'bold', size: 'sm', align: 'end' },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                contents: [
+                  { type: 'text', text: 'Stamps', color: '#666666', size: 'sm', flex: 0 },
+                  { type: 'text', text: String(profile.current_stamps || 0), weight: 'bold', size: 'sm', align: 'end' },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                contents: [
+                  { type: 'text', text: 'Available rewards', color: '#666666', size: 'sm', flex: 0 },
+                  { type: 'text', text: String(availableRewards), weight: 'bold', size: 'sm', align: 'end' },
+                ],
+              },
+            ],
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                style: 'primary',
+                action: {
+                  type: 'uri',
+                  label: 'View Member Card',
+                  uri: 'https://grandfa-farm-cafe.onrender.com/liff/member',
+                },
+              },
+            ],
+          },
+        },
       };
     }
 
