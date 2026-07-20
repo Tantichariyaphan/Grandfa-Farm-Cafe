@@ -80,7 +80,7 @@ for(const[key,value]of Object.entries(data)){
     if(value.total!==undefined){html+='<div class="stat-number">'+value.total+'</div>'}
     html+='<div class="stat-details">';
     for(const[k,v]of Object.entries(value)){
-      if(k!=='total'){const label=k.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());html+='<div><strong>'+label+':</strong> '+v+'</div>'}}
+      if(k!=='total'){const label=k.replace(/_/g,' ').replace(/\\b\\w/g, l => l.toUpperCase());html+='<div><strong>'+label+':</strong> '+v+'</div>'}}
     html+='</div></article>'}}
 html+='</div>';
 return html}
