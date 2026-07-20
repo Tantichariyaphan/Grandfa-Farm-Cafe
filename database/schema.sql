@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS promotions (
   id BIGSERIAL PRIMARY KEY,
   title VARCHAR(160) NOT NULL,
   description TEXT,
+  image TEXT,
   coupon_type VARCHAR(30) NOT NULL CHECK (coupon_type IN ('reward', 'birthday', 'holiday', 'promotion', 'welcome')),
   valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   valid_to TIMESTAMPTZ NOT NULL,
@@ -62,6 +63,26 @@ CREATE TABLE IF NOT EXISTS promotions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (valid_to > valid_from)
+);
+
+-- Coupon templates: reusable coupon definitions that members may claim later.
+CREATE TABLE IF NOT EXISTS coupon_templates (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(160) NOT NULL,
+  description TEXT,
+  image TEXT,
+  coupon_type VARCHAR(30) NOT NULL CHECK (coupon_type IN ('reward', 'birthday', 'holiday', 'promotion', 'welcome', 'manual')),
+  coupon_value NUMERIC DEFAULT NULL,
+  point_cost INTEGER DEFAULT NULL,
+  claim_start_at TIMESTAMPTZ,
+  claim_end_at TIMESTAMPTZ,
+  coupon_expire_days INTEGER DEFAULT NULL,
+  coupon_expire_at TIMESTAMPTZ DEFAULT NULL,
+  quantity_limit BIGINT DEFAULT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by BIGINT REFERENCES staff(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS coupons (

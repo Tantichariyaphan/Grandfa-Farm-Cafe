@@ -9,7 +9,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const validate = require('../middleware/validate');
 const requireStaffAuth = require('../middleware/staffAuth');
 const { ok } = require('../utils/response');
-const { resolveCouponFromToken, redeemCoupon } = require('../services/coupon/couponService');
+const { resolveCouponFromToken, redeemCoupon } = require('../services/coupon/couponVerificationService');
 
 const router = express.Router();
 

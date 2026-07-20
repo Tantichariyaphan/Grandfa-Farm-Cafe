@@ -36,9 +36,29 @@ input:focus{outline:none;border-color:#5b3a29;box-shadow:0 0 0 3px rgba(91,58,41
 <div class="top-nav"><h2>Dashboard</h2><div class="nav-buttons"><button id="refreshBtn">🔄 Refresh</button><button class="danger" onclick="logout()">Logout</button></div></div>
 <div id="stats" class="loading">Loading statistics…</div>
 <p id="result"></p>
-<div class="top-nav"><h2>Knowledge Center</h2><div class="nav-buttons"><button id="knowledgeRefreshBtn">🔄 Refresh</button></div></div>
+<div class="top-nav"><h2>Knowledge Center</h2><div class="nav-buttons"><input id="knowledgeSearch" placeholder="Search knowledge"><select id="knowledgeCategory"><option value="">All categories</option></select><select id="knowledgeActiveFilter"><option value="">All</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="knowledgeRefreshBtn">🔄 Refresh</button></div></div>
 <div id="knowledgeList" class="loading">Loading knowledge…</div>
 <div id="knowledgeMessage"></div>
+<div class="top-nav"><h2>Chatbot Keywords <span id="keywordCount" style="font-size:0.8rem;color:#8d6e63;margin-left:1rem"></span></h2><div class="nav-buttons"><input id="keywordsSearch" placeholder="Search keywords"><select id="keywordsTypeFilter"><option value="">All types</option><option value="text">text</option><option value="knowledge">knowledge</option><option value="dynamic">dynamic</option></select><select id="keywordsActiveFilter"><option value="">All</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="keywordsRefreshBtn">🔄 Refresh</button><button id="createKeywordBtn">➕ New</button></div></div>
+<div id="keywordList" class="loading">Loading keywords…</div>
+<div id="keywordMessage"></div>
+
+<div class="top-nav"><h2>Marketing</h2><div class="nav-buttons"><button id="promotionsRefreshBtn">🔄 Promotions</button><button id="couponTemplatesRefreshBtn">🔄 Coupons</button><button id="rewardsRefreshBtn">🔄 Rewards</button></div></div>
+
+<div id="marketing">
+  <div class="top-nav"><h2>Promotions</h2><div class="nav-buttons"><button id="createPromotionBtn">➕ New Promotion</button><button id="promotionsRefreshBtn2">🔄 Refresh</button></div></div>
+  <div id="promotionsList" class="loading">Loading promotions…</div>
+  <div id="promotionsMessage"></div>
+
+  <div class="top-nav"><h2>Coupon Templates</h2><div class="nav-buttons"><button id="createTemplateBtn">➕ New Template</button><button id="couponTemplatesRefreshBtn2">🔄 Refresh</button></div></div>
+  <div id="templatesList" class="loading">Loading coupon templates…</div>
+  <div id="templatesMessage"></div>
+
+  <div class="top-nav"><h2>Rewards (Point Exchange)</h2><div class="nav-buttons"><button id="rewardsRefreshBtn2">🔄 Refresh</button></div></div>
+  <div id="rewardsList" class="loading">Loading reward options…</div>
+  <div id="rewardsMessage"></div>
+</div>
+
 </section>
 </div>
 <script>
@@ -93,7 +113,7 @@ const KNOWLEDGE_TEMPLATE=[
 
 function mergeKnowledgeWithTemplate(apiEntries){
   const byKey={};
-  (apiEntries||[]).forEach(e=>{byKey[e.key]=e.value||{}});
+  (apiEntries||[]).forEach(e=>{byKey[e.key]=Object.assign({}, e.value||{}, { updated_at: e.updated_at, updated_by_name: e.value && e.value.updated_by_name ? e.value.updated_by_name : null })});
   return KNOWLEDGE_TEMPLATE.map(group=>({
     category:group.category,
     label:group.label,
@@ -104,6 +124,8 @@ function mergeKnowledgeWithTemplate(apiEntries){
         title:stored.title!==undefined?stored.title:item.title,
         content:stored.content!==undefined?stored.content:'',
         order:stored.order!==undefined?stored.order:(i+1),
+        updated_at: stored.updated_at || null,
+        updated_by_name: stored.updated_by_name || null,
       }})
   }))}
 
@@ -116,6 +138,7 @@ groups.forEach(group=>{
   group.items.forEach(item=>{
     html+='<article class="stat-card">'
       +'<div class="stat-label">🔑 '+item.key+'</div>'
+      +'<div style="font-size:0.9rem;color:#8d6e63;margin-bottom:0.5rem">'+(item.updated_by_name?('Updated by: '+esc(item.updated_by_name)):'')+(item.updated_at?(' • '+new Date(item.updated_at).toLocaleString()):'')+'</div>'
       +'<input id="kw-title-'+item.key+'" value="'+esc(item.title)+'" placeholder="Title">'
       +'<input id="kw-content-'+item.key+'" value="'+esc(item.content)+'" placeholder="Content">'
       +'<input id="kw-order-'+item.key+'" type="number" value="'+esc(item.order)+'" placeholder="Order">'
@@ -142,6 +165,335 @@ document.getElementById('signInBtn').onclick=async()=>{const btn=document.getEle
 
 document.getElementById('refreshBtn').onclick=loadStats;
 document.getElementById('knowledgeRefreshBtn').onclick=loadKnowledge;
+
+// Keywords handlers
+document.getElementById('keywordsRefreshBtn').onclick=loadKeywords;
+document.getElementById('createKeywordBtn').onclick=showCreateKeywordForm;
+
+// Marketing handlers
+document.getElementById('promotionsRefreshBtn').onclick = loadPromotions;
+document.getElementById('promotionsRefreshBtn2').onclick = loadPromotions;
+document.getElementById('createPromotionBtn').onclick = showCreatePromotionForm;
+
+document.getElementById('couponTemplatesRefreshBtn').onclick = loadTemplates;
+document.getElementById('couponTemplatesRefreshBtn2').onclick = loadTemplates;
+document.getElementById('createTemplateBtn').onclick = showCreateTemplateForm;
+
+document.getElementById('rewardsRefreshBtn').onclick = loadRewards;
+document.getElementById('rewardsRefreshBtn2').onclick = loadRewards;
+
+let _knowledgeItems = [];
+
+async function loadKeywords(){
+  const el=document.getElementById('keywordList');
+  el.innerHTML='<div class="loading">Loading keywords…</div>';
+  try{
+    // fetch knowledge items for dropdowns
+    const kitems = await api('/api/knowledge');
+    _knowledgeItems = Array.isArray(kitems) ? kitems : [];
+
+    const search = encodeURIComponent(document.getElementById('keywordsSearch').value || '');
+    const response_type = encodeURIComponent(document.getElementById('keywordsTypeFilter').value || '');
+    const is_active = encodeURIComponent(document.getElementById('keywordsActiveFilter').value || '');
+    const q = [];
+    if(search) q.push('search='+search);
+    if(response_type) q.push('response_type='+response_type);
+    if(is_active) q.push('is_active='+is_active);
+    const queryStr = q.length ? ('?'+q.join('&')) : '';
+
+    const data = await api('/api/dashboard/keywords'+queryStr);
+    const rows = data.rows || [];
+    document.getElementById('keywordCount').textContent = '('+ (data.count||rows.length) +')';
+    el.innerHTML = renderKeywords(rows);
+    setupKeywordHandlers();
+  }catch(e){el.innerHTML='<div class="error">⚠️ Failed to load keywords: '+e.message+'<br><button onclick="loadKeywords()">Try Again</button></div>'}
+}
+
+// ----- Marketing UI functions -----
+async function loadPromotions(){
+  const el = document.getElementById('promotionsList');
+  el.innerHTML = '<div class="loading">Loading promotions…</div>';
+  try{
+    const data = await api('/api/dashboard/marketing/promotions');
+    el.innerHTML = renderPromotions(data || []);
+    setupPromotionsHandlers();
+  }catch(e){el.innerHTML = '<div class="error">⚠️ Failed to load promotions: '+e.message+'<br><button onclick="loadPromotions()">Try Again</button></div>'}
+}
+
+function renderPromotions(list){
+  if(!list||list.length===0) return '<div class="empty">No promotions yet</div>';
+  const esc = s => String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');
+  let html = '<div class="grid">';
+  list.forEach(p => {
+    html += '<article class="stat-card">'
+      +'<div class="stat-label">📣 '+esc(p.title)+'</div>'
+      +(p.image?'<div style="margin:.5rem 0"><img src="'+esc(p.image)+'" alt="'+esc(p.title)+'" style="max-width:100%;height:120px;object-fit:cover;border-radius:.5rem"></div>':'')
+      +'<div style="font-size:0.9rem;color:#8d6e63">'+esc(p.description||'')+'</div>'
+      +'<div style="margin-top:.5rem;font-size:0.85rem;color:#8d6e63">Valid: '+(new Date(p.valid_from).toLocaleString())+' → '+(new Date(p.valid_to).toLocaleString())+'</div>'
+      +'<div style="margin-top:.5rem">'
+      +'<button class="promo-toggle" data-id="'+p.id+'">'+(p.is_active? 'Disable' : 'Enable')+'</button>'
+      +'<button class="promo-delete danger" data-id="'+p.id+'">Delete</button>'
+      +'</div></article>'
+  });
+  html += '</div>';
+  return html;
+}
+
+function setupPromotionsHandlers(){
+  document.querySelectorAll('.promo-toggle').forEach(btn=>btn.addEventListener('click',async function(){
+    const id = this.dataset.id;
+    const enable = this.textContent === 'Enable';
+    try{await api('/api/dashboard/marketing/promotions/'+id+'/active',{method:'PATCH',body:JSON.stringify({is_active: enable})});document.getElementById('promotionsMessage').innerHTML='<div class="success">Updated</div>';await loadPromotions()}catch(e){document.getElementById('promotionsMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+  document.querySelectorAll('.promo-delete').forEach(btn=>btn.addEventListener('click',async function(){
+    if(!confirm('Disable this promotion?')) return;
+    const id = this.dataset.id;
+    try{await api('/api/dashboard/marketing/promotions/'+id,{method:'DELETE'});document.getElementById('promotionsMessage').innerHTML='<div class="success">Disabled</div>';await loadPromotions()}catch(e){document.getElementById('promotionsMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+}
+
+function showCreatePromotionForm(){
+  const el = document.getElementById('promotionsList');
+  el.innerHTML = '<div class="stat-card">'
+    +'<input id="new-p-title" placeholder="Title">'
+    +'<input id="new-p-image" placeholder="Image URL">'
+    +'<input id="new-p-start" placeholder="Start (ISO 8601)">'
+    +'<input id="new-p-end" placeholder="End (ISO 8601)">'
+    +'<textarea id="new-p-desc" placeholder="Description"></textarea>'
+    +'<div><button id="createPromotionSave">Create</button><button id="createPromotionCancel" class="secondary">Cancel</button></div>'
+    +'</div>';
+  document.getElementById('createPromotionCancel').onclick = loadPromotions;
+  document.getElementById('createPromotionSave').onclick = async ()=>{
+    const payload = { title: document.getElementById('new-p-title').value, image: document.getElementById('new-p-image').value, start_at: document.getElementById('new-p-start').value, end_at: document.getElementById('new-p-end').value, description: document.getElementById('new-p-desc').value };
+    try{await api('/api/dashboard/marketing/promotions',{method:'POST',body:JSON.stringify(payload)});document.getElementById('promotionsMessage').innerHTML='<div class="success">Created</div>';await loadPromotions()}catch(e){document.getElementById('promotionsMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }
+}
+
+async function loadTemplates(){
+  const el = document.getElementById('templatesList');
+  el.innerHTML = '<div class="loading">Loading coupon templates…</div>';
+  try{
+    const data = await api('/api/dashboard/marketing/coupon-templates');
+    el.innerHTML = renderTemplates(data || []);
+    setupTemplateHandlers();
+  }catch(e){el.innerHTML = '<div class="error">⚠️ Failed to load templates: '+e.message+'<br><button onclick="loadTemplates()">Try Again</button></div>'}
+}
+
+function renderTemplates(list){
+  if(!list||list.length===0) return '<div class="empty">No templates yet</div>';
+  const esc = s => String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');
+  let html = '<div class="grid">';
+  list.forEach(t=>{
+    html += '<article class="stat-card">'
+      +'<div class="stat-label">🎟 '+esc(t.title)+'</div>'
+      +(t.image?'<div style="margin:.5rem 0"><img src="'+esc(t.image)+'" alt="'+esc(t.title)+'" style="max-width:100%;height:120px;object-fit:cover;border-radius:.5rem"></div>':'')
+      +'<div style="font-size:0.9rem;color:#8d6e63">'+esc(t.description||'')+'</div>'
+      +'<div style="margin-top:.5rem;font-size:0.85rem;color:#8d6e63">Type: '+esc(t.coupon_type||'')+(t.point_cost?(' • Cost: '+t.point_cost+' pts'):'')+'</div>'
+      +'<div style="margin-top:.5rem">'
+      +'<button class="tpl-edit" data-id="'+t.id+'">Edit</button>'
+      +'<button class="tpl-delete danger" data-id="'+t.id+'">Delete</button>'
+      +'</div></article>'
+  });
+  html += '</div>';
+  return html;
+}
+
+function setupTemplateHandlers(){
+  document.querySelectorAll('.tpl-edit').forEach(btn=>btn.addEventListener('click',async function(){
+    const id = this.dataset.id; showEditTemplateForm(id);
+  }));
+  document.querySelectorAll('.tpl-delete').forEach(btn=>btn.addEventListener('click',async function(){
+    if(!confirm('Delete this template?')) return;
+    const id = this.dataset.id; try{await api('/api/dashboard/marketing/coupon-templates/'+id,{method:'DELETE'});document.getElementById('templatesMessage').innerHTML='<div class="success">Deleted</div>';await loadTemplates()}catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+}
+
+function showCreateTemplateForm(){
+  const el = document.getElementById('templatesList');
+  el.innerHTML = '<div class="stat-card">'
+    +'<input id="tpl-title" placeholder="Title">'
+    +'<input id="tpl-image" placeholder="Image URL">'
+    +'<input id="tpl-type" placeholder="Coupon Type">'
+    +'<input id="tpl-pointcost" type="number" placeholder="Point Cost">'
+    +'<textarea id="tpl-desc" placeholder="Description"></textarea>'
+    +'<div><button id="createTemplateSave">Create</button><button id="createTemplateCancel" class="secondary">Cancel</button></div>'
+    +'</div>';
+  document.getElementById('createTemplateCancel').onclick = loadTemplates;
+  document.getElementById('createTemplateSave').onclick = async ()=>{
+    const payload = { title: document.getElementById('tpl-title').value, image: document.getElementById('tpl-image').value, coupon_type: document.getElementById('tpl-type').value, point_cost: Number(document.getElementById('tpl-pointcost').value)||null, description: document.getElementById('tpl-desc').value };
+    try{await api('/api/dashboard/marketing/coupon-templates',{method:'POST',body:JSON.stringify(payload)});document.getElementById('templatesMessage').innerHTML='<div class="success">Created</div>';await loadTemplates()}catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }
+}
+
+async function showEditTemplateForm(id){
+  try{
+    const tpl = await api('/api/dashboard/marketing/coupon-templates?id='+id);
+    const el = document.getElementById('templatesList');
+    el.innerHTML = '<div class="stat-card">'
+      +'<input id="tpl-title" value="'+(tpl.title||'')+'" placeholder="Title">'
+      +'<input id="tpl-image" value="'+(tpl.image||'')+'" placeholder="Image URL">'
+      +'<input id="tpl-type" value="'+(tpl.coupon_type||'')+'" placeholder="Coupon Type">'
+      +'<input id="tpl-pointcost" type="number" value="'+(tpl.point_cost||'')+'" placeholder="Point Cost">'
+      +'<textarea id="tpl-desc" placeholder="Description">'+(tpl.description||'')+'</textarea>'
+      +'<div><button id="updateTemplateSave">Save</button><button id="updateTemplateCancel" class="secondary">Cancel</button></div>'
+      +'</div>';
+    document.getElementById('updateTemplateCancel').onclick = loadTemplates;
+    document.getElementById('updateTemplateSave').onclick = async ()=>{
+      const payload = { title: document.getElementById('tpl-title').value, image: document.getElementById('tpl-image').value, coupon_type: document.getElementById('tpl-type').value, point_cost: Number(document.getElementById('tpl-pointcost').value)||null, description: document.getElementById('tpl-desc').value };
+      try{await api('/api/dashboard/marketing/coupon-templates/'+id,{method:'PUT',body:JSON.stringify(payload)});document.getElementById('templatesMessage').innerHTML='<div class="success">Saved</div>';await loadTemplates()}catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+    }
+  }catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+}
+
+async function loadRewards(){
+  const el = document.getElementById('rewardsList');
+  el.innerHTML = '<div class="loading">Loading reward options…</div>';
+  try{
+    const data = await api('/api/dashboard/marketing/rewards');
+    const list = Array.isArray(data) ? data : [];
+    if(list.length===0){el.innerHTML='<div class="empty">No point-exchange rewards configured</div>';return}
+    const esc = s => String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');
+    let html = '<div class="grid">';
+    list.forEach(r=>{
+      html += '<article class="stat-card">'
+        +'<div class="stat-label">🎯 '+esc(r.title)+'</div>'
+        +'<div style="font-size:0.9rem;color:#8d6e63">Cost: '+(r.point_cost||0)+' points</div>'
+        +'<div style="margin-top:.5rem">'
+        +'<button class="reward-toggle" data-id="'+r.id+'">'+(r.is_active? 'Disable' : 'Enable')+'</button>'
+        +'</div></article>'
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    document.querySelectorAll('.reward-toggle').forEach(btn=>btn.addEventListener('click',async function(){const id=this.dataset.id;try{await api('/api/dashboard/marketing/rewards/'+id+'/toggle',{method:'PATCH'});document.getElementById('rewardsMessage').innerHTML='<div class="success">Toggled</div>';await loadRewards()}catch(e){document.getElementById('rewardsMessage').innerHTML='<div class="error">'+e.message+'</div>'}}));
+  }catch(e){el.innerHTML = '<div class="error">⚠️ Failed to load rewards: '+e.message+'<br><button onclick="loadRewards()">Try Again</button></div>'}
+}
+
+async function showEditTemplateForm(id){
+  try{
+    const rows = await api('/api/dashboard/marketing/coupon-templates');
+    const tpl = (rows || []).find(r => String(r.id) === String(id));
+    if(!tpl) { document.getElementById('templatesMessage').innerHTML = '<div class="error">Template not found</div>'; return; }
+    const el = document.getElementById('templatesList');
+    el.innerHTML = '<div class="stat-card">'
+      +'<input id="tpl-title" value="'+(tpl.title||'')+'" placeholder="Title">'
+      +'<input id="tpl-image" value="'+(tpl.image||'')+'" placeholder="Image URL">'
+      +'<input id="tpl-type" value="'+(tpl.coupon_type||'')+'" placeholder="Coupon Type">'
+      +'<input id="tpl-pointcost" type="number" value="'+(tpl.point_cost||'')+'" placeholder="Point Cost">'
+      +'<textarea id="tpl-desc" placeholder="Description">'+(tpl.description||'')+'</textarea>'
+      +'<div><button id="updateTemplateSave">Save</button><button id="updateTemplateCancel" class="secondary">Cancel</button></div>'
+      +'</div>';
+    document.getElementById('updateTemplateCancel').onclick = loadTemplates;
+    document.getElementById('updateTemplateSave').onclick = async ()=>{
+      const payload = { title: document.getElementById('tpl-title').value, image: document.getElementById('tpl-image').value, coupon_type: document.getElementById('tpl-type').value, point_cost: Number(document.getElementById('tpl-pointcost').value)||null, description: document.getElementById('tpl-desc').value };
+      try{await api('/api/dashboard/marketing/coupon-templates/'+id,{method:'PUT',body:JSON.stringify(payload)});document.getElementById('templatesMessage').innerHTML='<div class="success">Saved</div>';await loadTemplates()}catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+    }
+  }catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+}
+
+function renderKeywords(list){if(!list||list.length===0)return '<div class="empty">No keywords yet</div>';const esc=(s)=>String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');let html='<div class="grid">';list.forEach(item=>{html+='<article class="stat-card">'
++'<div class="stat-label">🔑 '+esc(item.keyword)+'</div>'
++'<input class="kw-field" data-id="'+item.id+'" data-field="keyword" value="'+esc(item.keyword)+'" placeholder="Keyword">'
++'<select class="kw-field" data-id="'+item.id+'" data-field="response_type">'
++['text','knowledge','dynamic'].map(t=>'<option value="'+t+'"'+(item.response_type===t?' selected':'')+'>'+t+'</option>').join('')+' '</select>'
++(item.response_type==='knowledge' ? (function(){ const opts = (_knowledgeItems||[]).map(k=>'<option value="'+esc(k.key)+'"'+(item.response_target===k.key?' selected':'')+'>'+esc((k.value&&k.value.title)||k.key)+'</option>').join(''); return '<select class="kw-field" data-id="'+item.id+'" data-field="response_target">'+opts+'</select>'; })() : '<input class="kw-field" data-id="'+item.id+'" data-field="response_target" value="'+esc(item.response_target||'')+'" placeholder="Response Target">')
++'<textarea class="kw-field" data-id="'+item.id+'" data-field="response_text" placeholder="Response Text">'+esc(item.response_text||'')+'</textarea>'
++'<input class="kw-field" data-id="'+item.id+'" data-field="priority" type="number" value="'+esc(item.priority||'0')+'" placeholder="Priority">'
++'<div style="margin-top:.5rem">'
++'<button class="kw-save" data-id="'+item.id+'">Save</button>'
++'<button class="kw-toggle" data-id="'+item.id+'">'+(item.is_active? 'Disable' : 'Enable')+'</button>'
++'<button class="kw-delete danger" data-id="'+item.id+'">Delete</button>'
++'</div></article>'});html+='</div>';return html}
+
+function setupKeywordHandlers(){
+  document.querySelectorAll('.kw-save').forEach(btn=>btn.addEventListener('click',async function(){
+    const id=this.dataset.id;
+    const fields=document.querySelectorAll('.kw-field[data-id="'+id+'"]');
+    const payload={};
+    fields.forEach(f=>{const k=f.dataset.field;payload[k]=f.value});
+    try{await api('/api/dashboard/keywords/'+id,{method:'PUT',body:JSON.stringify(payload)});document.getElementById('keywordMessage').innerHTML='<div class="success">Saved</div>';await loadKeywords()}catch(e){document.getElementById('keywordMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+
+  document.querySelectorAll('.kw-toggle').forEach(btn=>btn.addEventListener('click',async function(){
+    const id=this.dataset.id;
+    try{
+      const el=document.getElementById('keywordMessage');
+      // determine desired state by current button text
+      const enable = this.textContent === 'Enable';
+      await api('/api/dashboard/keywords/'+id,{method:'PUT',body:JSON.stringify({is_active: enable})});
+      el.innerHTML='<div class="success">Toggled</div>';await loadKeywords()
+    }catch(e){document.getElementById('keywordMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+
+  document.querySelectorAll('.kw-delete').forEach(btn=>btn.addEventListener('click',async function(){
+    if(!confirm('Delete this keyword?'))return;
+    const id=this.dataset.id;
+    try{await api('/api/dashboard/keywords/'+id,{method:'DELETE'});document.getElementById('keywordMessage').innerHTML='<div class="success">Deleted</div>';await loadKeywords()}catch(e){document.getElementById('keywordMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }));
+
+  // dynamic response_target control when response_type changes
+  document.querySelectorAll('.kw-field[data-field="response_type"]').forEach(sel=>{
+    sel.addEventListener('change', function(){
+      const id=this.dataset.id;
+      const rt = document.querySelector('.kw-field[data-id="'+id+'"][data-field="response_target"]');
+      if(!rt) return;
+      const currentValue = rt.value || '';
+      if(this.value === 'knowledge'){
+        // replace with select
+        const opts = (_knowledgeItems||[]).map(k => '<option value="'+k.key+'"'+(k.key===currentValue?' selected':'')+'>'+(k.value&&k.value.title?k.value.title:k.key)+'</option>').join('');
+        const selHtml = '<select class="kw-field" data-id="'+id+'" data-field="response_target">'+opts+'</select>';
+        rt.outerHTML = selHtml;
+      } else {
+        // replace with input
+        const inputHtml = '<input class="kw-field" data-id="'+id+'" data-field="response_target" value="'+(currentValue||'')+'" placeholder="Response Target">';
+        rt.outerHTML = inputHtml;
+      }
+    });
+  });
+}
+
+
+async function showCreateKeywordForm(){
+  const el=document.getElementById('keywordList');
+  const options = ['text','knowledge','dynamic'].map(t=>'<option value="'+t+'">'+t+'</option>').join('');
+  const knowledgeOptions = (_knowledgeItems||[]).map(k=>'<option value="'+k.key+'">'+(k.value&&k.value.title?k.value.title:k.key)+'</option>').join('');
+  el.innerHTML='<div class="stat-card">'
+    +'<input id="new-keyword" placeholder="Keyword">'
+    +'<select id="new-response-type">'+options+'</select>'
+    +'<span id="new-response-target-wrapper">'+('<input id="new-response-target" placeholder="Response Target">')+'</span>'
+    +'<textarea id="new-response-text" placeholder="Response Text"></textarea>'
+    +'<input id="new-priority" type="number" placeholder="Priority">'
+    +'<div><button id="createKeywordSave">Create</button><button id="createKeywordCancel" class="secondary">Cancel</button></div>'
+    +'</div>';
+
+  const wrapper = document.getElementById('new-response-target-wrapper');
+  const rtSelectHtml = '<select id="new-response-target">'+knowledgeOptions+'</select>';
+  const rtInputHtml = '<input id="new-response-target" placeholder="Response Target">';
+
+  function updateNewResponseTarget(){
+    const type = document.getElementById('new-response-type').value;
+    if(type === 'knowledge'){
+      wrapper.innerHTML = rtSelectHtml;
+    }else{
+      wrapper.innerHTML = rtInputHtml;
+    }
+  }
+
+  document.getElementById('createKeywordCancel').onclick=loadKeywords;
+  document.getElementById('new-response-type').addEventListener('change', updateNewResponseTarget);
+  // initialize
+  updateNewResponseTarget();
+
+  document.getElementById('createKeywordSave').onclick=async()=>{
+    const payload={
+      keyword:document.getElementById('new-keyword').value,
+      response_type:document.getElementById('new-response-type').value,
+      response_target:document.getElementById('new-response-target').value,
+      response_text:document.getElementById('new-response-text').value,
+      priority:document.getElementById('new-priority').value||0
+    };
+    try{await api('/api/dashboard/keywords',{method:'POST',body:JSON.stringify(payload)});document.getElementById('keywordMessage').innerHTML='<div class="success">Created</div>';await loadKeywords()}catch(e){document.getElementById('keywordMessage').innerHTML='<div class="error">'+e.message+'</div>'}
+  }
+}
 
 if(token){validateSession().then(valid=>{if(valid){open()}else{logout()}})};
 </script></body></html>`;
