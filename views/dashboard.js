@@ -80,7 +80,7 @@ for(const[key,value]of Object.entries(data)){
     if(value.total!==undefined){html+='<div class="stat-number">'+value.total+'</div>'}
     html+='<div class="stat-details">';
     for(const[k,v]of Object.entries(value)){
-      if(k!=='total'){const label=k.replace(/_/g,' ').replace(/\\b\\w/g, l => l.toUpperCase());html+='<div><strong>'+label+':</strong> '+v+'</div>'}}
+      if(k!=='total'){const label=k.replace(/_/g,' ').replace(new RegExp('\\\\b\\\\w','g'), function(l){return l.toUpperCase();});html+='<div><strong>'+label+':</strong> '+v+'</div>'}}
     html+='</div></article>'}}
 html+='</div>';
 return html}
@@ -130,7 +130,7 @@ function mergeKnowledgeWithTemplate(apiEntries){
   }))}
 
 function renderKnowledge(groups){if(!groups||groups.length===0)return '<div class="empty">No knowledge entries yet</div>';
-const esc=(s)=>String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');
+const esc=(s)=>String(s===undefined||s===null?'':s).replace(new RegExp('"','g'),'&quot;');
 let html='';
 groups.forEach(group=>{
   html+='<h3 style="color:#5b3a29;margin:1.5rem 0 .5rem">'+group.label+'</h3>';
@@ -390,7 +390,7 @@ async function showEditTemplateForm(id){
   }catch(e){document.getElementById('templatesMessage').innerHTML='<div class="error">'+e.message+'</div>'}
 }
 
-function renderKeywords(list){if(!list||list.length===0)return '<div class="empty">No keywords yet</div>';const esc=(s)=>String(s===undefined||s===null?'':s).replace(/"/g,'&quot;');let html='<div class="grid">';list.forEach(item=>{html+='<article class="stat-card">'
+function renderKeywords(list){if(!list||list.length===0)return '<div class="empty">No keywords yet</div>';const esc=(s)=>String(s===undefined||s===null?'':s).replace(new RegExp('"','g'),'&quot;');let html='<div class="grid">';list.forEach(item=>{html+='<article class="stat-card">'
 +'<div class="stat-label">🔑 '+esc(item.keyword)+'</div>'
 +'<input class="kw-field" data-id="'+item.id+'" data-field="keyword" value="'+esc(item.keyword)+'" placeholder="Keyword">'
 +'<select class="kw-field" data-id="'+item.id+'" data-field="response_type">'
