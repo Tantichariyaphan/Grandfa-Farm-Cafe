@@ -9,4 +9,16 @@ router.post('/', webhookLimiter, createLineWebhookMiddleware(), asyncHandler(asy
   await processWebhookEvents(req.body.events || []);
   res.status(200).end();
 }));
+router.post(
+'/',
+webhookLimiter,
+createLineWebhookMiddleware(),
+asyncHandler(async(req,res)=>{
+console.log("===== WEBHOOK =====");
+console.log(req.body);
+await processWebhookEvents(req.body.events||[]);
+res.status(200).end();
+})
+);
+
 module.exports = router;
