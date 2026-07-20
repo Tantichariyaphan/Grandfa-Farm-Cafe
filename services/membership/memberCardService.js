@@ -44,19 +44,19 @@ if (member.total_stamps_earned >= 50) {
   membershipLevel = 3;
   membershipName = "Grandfa Heritage";
   membershipTagline = "A place where memories become traditions.";
-  memberCardBackground = "/pic/membercard/MembercardLevel3.png";
+  memberCardBackground = "/pic/membercard/MembercardLevel3.webp";
 }
 else if (member.total_stamps_earned >= 20) {
   membershipLevel = 2;
   membershipName = "Grandfa Family";
   membershipTagline = "You're no longer just a guest. You're family.";
-  memberCardBackground = "/pic/membercard/MembercardLevel2.png";
+  memberCardBackground = "/pic/membercard/MembercardLevel2.webp";
 }
 else {
   membershipLevel = 1;
   membershipName = "Grandfa Friend";
   membershipTagline = "Every great journey starts with a first visit.";
-  memberCardBackground = "/pic/membercard/MembercardLevel1.png";
+  memberCardBackground = "/pic/membercard/MembercardLevel1.webp";
 }
   return {
     displayName: member.display_name,
