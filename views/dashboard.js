@@ -394,7 +394,10 @@ function renderKeywords(list){if(!list||list.length===0)return '<div class="empt
 +'<div class="stat-label">🔑 '+esc(item.keyword)+'</div>'
 +'<input class="kw-field" data-id="'+item.id+'" data-field="keyword" value="'+esc(item.keyword)+'" placeholder="Keyword">'
 +'<select class="kw-field" data-id="'+item.id+'" data-field="response_type">'
-+['text','knowledge','dynamic'].map(t=>'<option value="'+t+'"'+(item.response_type===t?' selected':'')+'>'+t+'</option>').join('')+' '</select>'
++['text','knowledge','dynamic']
+  .map(t => '<option value="'+t+'"'+(item.response_type===t ? ' selected' : '')+'>'+t+'</option>')
+  .join('')
++'</select>'
 +(item.response_type==='knowledge' ? (function(){ const opts = (_knowledgeItems||[]).map(k=>'<option value="'+esc(k.key)+'"'+(item.response_target===k.key?' selected':'')+'>'+esc((k.value&&k.value.title)||k.key)+'</option>').join(''); return '<select class="kw-field" data-id="'+item.id+'" data-field="response_target">'+opts+'</select>'; })() : '<input class="kw-field" data-id="'+item.id+'" data-field="response_target" value="'+esc(item.response_target||'')+'" placeholder="Response Target">')
 +'<textarea class="kw-field" data-id="'+item.id+'" data-field="response_text" placeholder="Response Text">'+esc(item.response_text||'')+'</textarea>'
 +'<input class="kw-field" data-id="'+item.id+'" data-field="priority" type="number" value="'+esc(item.priority||'0')+'" placeholder="Priority">'
