@@ -177,7 +177,7 @@ async function setupProfileForm(){
       const phone=document.getElementById('phone').value.trim();
       const birthday=document.getElementById('birthday').value;
       // basic client-side validation
-      if (phone && !/^\+?[0-9\- ]{7,20}$/.test(phone)) {
+      if (phone && phone.length < 7) {
           throw new Error('Invalid phone number format');
       }
       await api('/api/member/profile',{method:'PUT',body:JSON.stringify({phone,birthday})});
