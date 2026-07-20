@@ -94,6 +94,54 @@ function textWithLoginPrompt() {
 }
 
 /**
+ * Normalize raw user input for keyword matching.
+ * @param {string} rawText
+ * @returns {string} normalized text (trimmed, lowercase)
+ */
+function normalizeKeyword(rawText) {
+  return (rawText || '').trim().toLowerCase();
+}
+
+/**
+ * Find an active keyword from the database with alias mapping support.
+ * Applies alias mapping before database lookup.
+ * @param {string} normalizedKeyword
+ * @returns {Promise<object|null>} keyword row from database, or null if not found
+ */
+async function findActiveKeyword(normalizedKeyword) {
+  if (!normalizedKeyword) return null;
+
+  // Alias mapping: map normalizedKeyword to canonical form if alias exists
+  const aliasMap = {
+    'help': 'menu',
+    'member menu': 'menu',
+    'member card': 'membership',
+    'my card': 'membership',
+    'stamp': 'stamps',
+    'coupon': 'coupons',
+    'my coupons': 'coupons',
+    'store information': 'store info',
+    'info': 'store info',
+    'hours': 'business hours',
+    'opening hours': 'business hours',
+    'address': 'location',
+    'where': 'location',
+    'contact us': 'contact',
+    'phone': 'contact',
+    'deals': 'promotion',
+  };
+
+  const canonicalKeyword = aliasMap[normalizedKeyword] || normalizedKeyword;
+
+  const result = await query(
+    `SELECT * FROM chat_keywords WHERE keyword = $1 AND is_active = true LIMIT 1`,
+    [canonicalKeyword]
+  );
+
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+/**
  * @param {string} rawText
  * @param {object|null} member
  * @returns {Promise<object|object[]|null>} message(s) to reply with, or null if no keyword matched
@@ -108,4 +156,4 @@ async function matchKeyword(rawText, member) {
   return null;
 }
 
-module.exports = { matchKeyword, buildMainMenuFlex };
+module.exports = { matchKeyword, buildMainMenuFlex, normalizeKeyword, findActiveKeyword };
