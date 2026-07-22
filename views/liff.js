@@ -109,7 +109,7 @@ async function logout(){
   location.reload()
 }
 
-async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(!isStaff){setupNavigationButtons();view('card')}}
+async function open(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(!isStaff){setupNavigationButtons();const liffState=new URLSearchParams(window.location.search).get('liff.state');view(liffState==='/coupons'?'coupons':'card')}}
 
 function formatCurrency(num){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(num||0)}
 function formatDate(date){return new Date(date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}

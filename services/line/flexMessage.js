@@ -135,7 +135,7 @@ function buildCouponFlex(coupon) {
             type: 'button',
             style: 'primary',
             color: '#5B3A29',
-            action: { type: 'uri', label: 'View & Redeem', uri: liffMemberUrl('/coupons') },
+            action: { type: 'uri', label: 'View & Redeem', uri: liffMemberUrl('?liff.state=%2Fcoupons') },
           },
         ],
       },
