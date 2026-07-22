@@ -38,11 +38,10 @@ router.get('/keywords', asyncHandler(async (req, res) => {
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
-  // Return sorted by priority desc then keyword for deterministic ordering
   const rowsRes = await query(
-    `SELECT id, keyword, response_text, response_type, response_target, priority, is_active, created_at, updated_at
+    `SELECT id, keyword, response_text, response_type, response_target, is_active, created_at, updated_at
      FROM chat_keywords ${where}
-     ORDER BY COALESCE(priority,0) DESC, keyword ASC`,
+     ORDER BY keyword ASC`,
     params
   );
 
@@ -51,7 +50,7 @@ router.get('/keywords', asyncHandler(async (req, res) => {
 
 router.post('/keywords', asyncHandler(async (req, res) => {
   const body = req.body || {};
-  const { keyword, response_type, response_target, response_text, priority } = body;
+  const { keyword, response_type, response_target, response_text } = body;
   if (!keyword || !response_type) {
     throw new Error('keyword and response_type are required');
   }
@@ -66,10 +65,10 @@ router.post('/keywords', asyncHandler(async (req, res) => {
 
   try {
     const result = await query(
-      `INSERT INTO chat_keywords (keyword, response_type, response_target, response_text, priority, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, COALESCE($5, 0), TRUE, NOW(), NOW())
-       RETURNING id, keyword, response_text, response_type, response_target, priority, is_active, created_at, updated_at`,
-      [keyword, response_type, response_target || null, response_text || '', priority || null]
+      `INSERT INTO chat_keywords (keyword, response_type, response_target, response_text, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
+       RETURNING id, keyword, response_text, response_type, response_target, is_active, created_at, updated_at`,
+      [keyword, response_type, response_target || null, response_text || '']
     );
     return ok(res, result.rows[0], 'Keyword created');
   } catch (err) {
@@ -82,9 +81,9 @@ router.post('/keywords', asyncHandler(async (req, res) => {
 }));
 
 router.put('/keywords/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = req.params.id;
   if (!id) throw new Error('Invalid id');
-  const { keyword, response_type, response_target, response_text, priority, is_active } = req.body || {};
+  const { keyword, response_type, response_target, response_text, is_active } = req.body || {};
 
   // If response_type is knowledge, validate response_target exists
   if (response_type === 'knowledge' && response_target) {
@@ -96,8 +95,8 @@ router.put('/keywords/:id', asyncHandler(async (req, res) => {
 
   try {
     const result = await query(
-      `UPDATE chat_keywords SET keyword = COALESCE($1, keyword), response_type = COALESCE($2, response_type), response_target = COALESCE($3, response_target), response_text = COALESCE($4, response_text), priority = COALESCE($5, priority), is_active = COALESCE($6, is_active), updated_at = NOW() WHERE id = $7 RETURNING id, keyword, response_text, response_type, response_target, priority, is_active, created_at, updated_at`,
-      [keyword || null, response_type || null, response_target || null, response_text || null, priority || null, typeof is_active === 'boolean' ? is_active : null, id]
+      `UPDATE chat_keywords SET keyword = COALESCE($1, keyword), response_type = COALESCE($2, response_type), response_target = COALESCE($3, response_target), response_text = COALESCE($4, response_text), is_active = COALESCE($5, is_active), updated_at = NOW() WHERE id = $6 RETURNING id, keyword, response_text, response_type, response_target, is_active, created_at, updated_at`,
+      [keyword || null, response_type || null, response_target || null, response_text || null, typeof is_active === 'boolean' ? is_active : null, id]
     );
     if (!result.rows[0]) throw new Error('Keyword not found');
     return ok(res, result.rows[0], 'Keyword updated');
@@ -110,7 +109,7 @@ router.put('/keywords/:id', asyncHandler(async (req, res) => {
 }));
 
 router.delete('/keywords/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
+  const id = req.params.id;
   if (!id) throw new Error('Invalid id');
   const result = await query(`DELETE FROM chat_keywords WHERE id = $1 RETURNING id`, [id]);
   if (!result.rows[0]) throw new Error('Keyword not found');
@@ -120,7 +119,6 @@ router.delete('/keywords/:id', asyncHandler(async (req, res) => {
 
 // ---- Marketing: Promotions (reuse existing promotionService) ----
 const { createPromotion, listPromotions, setPromotionActive } = require('../services/coupon/promotionService');
-const { createTemplate, listTemplates, getTemplate, updateTemplate, deleteTemplate } = require('../services/coupon/templateService');
 
 // Promotions endpoints for Owner dashboard
 router.get('/marketing/promotions', asyncHandler(async (req, res) => {
@@ -160,62 +158,28 @@ router.delete('/marketing/promotions/:id', asyncHandler(async (req, res) => {
 
 // Coupon templates (marketing)
 router.get('/marketing/coupon-templates', asyncHandler(async (req, res) => {
-  const { search, is_active } = req.query;
-  const templates = await listTemplates({ search, isActive: typeof is_active === 'undefined' ? undefined : (String(is_active) === 'true') });
-  return ok(res, templates);
+  return res.status(501).json({ success: false, message: 'Coupon Templates module has not been installed.' });
 }));
 
 router.post('/marketing/coupon-templates', asyncHandler(async (req, res) => {
-  const body = req.body || {};
-  const tpl = await createTemplate({
-    title: body.title,
-    description: body.description,
-    image: body.image,
-    couponType: body.coupon_type || body.couponType,
-    couponValue: body.coupon_value || body.couponValue,
-    pointCost: body.point_cost || body.pointCost,
-    claimStartAt: body.claim_start_at || body.claimStartAt,
-    claimEndAt: body.claim_end_at || body.claimEndAt,
-    couponExpireDays: body.coupon_expire_days || body.couponExpireDays,
-    couponExpireAt: body.coupon_expire_at || body.couponExpireAt,
-    quantityLimit: body.quantity_limit || body.quantityLimit,
-    isActive: typeof body.is_active === 'undefined' ? true : Boolean(body.is_active),
-    createdBy: req.staff.id,
-  });
-  return created(res, tpl, 'Coupon template created');
+  return res.status(501).json({ success: false, message: 'Coupon Templates module has not been installed.' });
 }));
 
 router.put('/marketing/coupon-templates/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id) throw new Error('Invalid id');
-  const patch = req.body || {};
-  const tpl = await updateTemplate(id, patch);
-  return ok(res, tpl, 'Coupon template updated');
+  return res.status(501).json({ success: false, message: 'Coupon Templates module has not been installed.' });
 }));
 
 router.delete('/marketing/coupon-templates/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id) throw new Error('Invalid id');
-  const tpl = await deleteTemplate(id);
-  return ok(res, tpl, 'Coupon template deleted');
+  return res.status(501).json({ success: false, message: 'Coupon Templates module has not been installed.' });
 }));
 
 // Rewards: show available point-exchange templates and allow toggling
 router.get('/marketing/rewards', asyncHandler(async (req, res) => {
-  // Return active coupon templates that have a point_cost (point-exchange options)
-  const templates = await listTemplates({});
-  const exchanges = templates.filter(t => t.point_cost !== null && t.point_cost !== undefined);
-  return ok(res, exchanges);
+  return res.status(501).json({ success: false, message: 'Reward module has not been installed.' });
 }));
 
 router.patch('/marketing/rewards/:id/toggle', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id) throw new Error('Invalid id');
-  // toggle is_active on the template
-  const tpl = await getTemplate(id);
-  if (!tpl) throw new Error('Template not found');
-  const updated = await updateTemplate(id, { is_active: !tpl.is_active });
-  return ok(res, updated, 'Reward option toggled');
+  return res.status(501).json({ success: false, message: 'Reward module has not been installed.' });
 }));
 
 module.exports = router;

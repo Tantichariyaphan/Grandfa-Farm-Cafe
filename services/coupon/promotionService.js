@@ -19,17 +19,17 @@ async function createPromotion({ title, description, image = null, couponType, v
   }
 
   const result = await query(
-    `INSERT INTO promotions (title, description, image, coupon_type, valid_from, valid_to, created_by)
-     VALUES ($1, $2, $3, $4, COALESCE($5, NOW()), $6, $7)
-     RETURNING id, title, description, image, coupon_type, valid_from, valid_to, is_active, created_at`,
-    [title, description || null, image || null, couponType, validFrom || null, validTo, createdBy]
+    `INSERT INTO promotions (title, description, coupon_type, valid_from, valid_to, created_by)
+     VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6)
+     RETURNING id, title, description, coupon_type, valid_from, valid_to, is_active, created_at`,
+    [title, description || null, couponType, validFrom || null, validTo, createdBy]
   );
   return result.rows[0];
 }
 
 async function listPromotions() {
   const result = await query(
-    `SELECT id, title, description, image, coupon_type, valid_from, valid_to, is_active, created_at
+    `SELECT id, title, description, coupon_type, valid_from, valid_to, is_active, created_at
      FROM promotions ORDER BY created_at DESC`
   );
   return result.rows;

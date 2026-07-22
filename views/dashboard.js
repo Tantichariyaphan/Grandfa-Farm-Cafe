@@ -64,7 +64,7 @@ input:focus{outline:none;border-color:#5b3a29;box-shadow:0 0 0 3px rgba(91,58,41
 <script>
 let token=localStorage.getItem('gcToken')||'';
 
-async function api(path,opt={}){try{let r=await fetch(path,{...opt,headers:{...(opt.headers||{}),'Content-Type':'application/json',Authorization:'Bearer '+token}});let j=await r.json();if(!j.success)throw Error(j.message);return j.data}catch(e){if(e.message.includes('401')||e.message.includes('Session')){await logout();throw e}throw e}}
+async function api(path,opt={}){try{let r=await fetch(path,{...opt,headers:{...(opt.headers||{}),'Content-Type':'application/json',Authorization:'Bearer '+token}});let j=await r.json();if(!r.ok||!j.success){const error=Error(j.message);error.status=r.status;throw error}return j.data}catch(e){if(e.message.includes('401')||e.message.includes('Session')){await logout();throw e}throw e}}
 
 async function validateSession(){try{await api('/api/auth/staff-session');return true}catch(e){return false}}
 
@@ -256,7 +256,6 @@ function showCreatePromotionForm(){
   const el = document.getElementById('promotionsList');
   el.innerHTML = '<div class="stat-card">'
     +'<input id="new-p-title" placeholder="Title">'
-    +'<input id="new-p-image" placeholder="Image URL">'
     +'<input id="new-p-start" placeholder="Start (ISO 8601)">'
     +'<input id="new-p-end" placeholder="End (ISO 8601)">'
     +'<textarea id="new-p-desc" placeholder="Description"></textarea>'
@@ -264,7 +263,7 @@ function showCreatePromotionForm(){
     +'</div>';
   document.getElementById('createPromotionCancel').onclick = loadPromotions;
   document.getElementById('createPromotionSave').onclick = async ()=>{
-    const payload = { title: document.getElementById('new-p-title').value, image: document.getElementById('new-p-image').value, start_at: document.getElementById('new-p-start').value, end_at: document.getElementById('new-p-end').value, description: document.getElementById('new-p-desc').value };
+    const payload = { title: document.getElementById('new-p-title').value, start_at: document.getElementById('new-p-start').value, end_at: document.getElementById('new-p-end').value, description: document.getElementById('new-p-desc').value };
     try{await api('/api/dashboard/marketing/promotions',{method:'POST',body:JSON.stringify(payload)});document.getElementById('promotionsMessage').innerHTML='<div class="success">Created</div>';await loadPromotions()}catch(e){document.getElementById('promotionsMessage').innerHTML='<div class="error">'+e.message+'</div>'}
   }
 }
@@ -276,7 +275,7 @@ async function loadTemplates(){
     const data = await api('/api/dashboard/marketing/coupon-templates');
     el.innerHTML = renderTemplates(data || []);
     setupTemplateHandlers();
-  }catch(e){el.innerHTML = '<div class="error">⚠️ Failed to load templates: '+e.message+'<br><button onclick="loadTemplates()">Try Again</button></div>'}
+  }catch(e){el.innerHTML = e.status===501?'<div class="empty">Coupon Templates module has not been installed.</div>':'<div class="error">⚠️ Failed to load templates: '+e.message+'<br><button onclick="loadTemplates()">Try Again</button></div>'}
 }
 
 function renderTemplates(list){
@@ -365,7 +364,7 @@ async function loadRewards(){
     html += '</div>';
     el.innerHTML = html;
     document.querySelectorAll('.reward-toggle').forEach(btn=>btn.addEventListener('click',async function(){const id=this.dataset.id;try{await api('/api/dashboard/marketing/rewards/'+id+'/toggle',{method:'PATCH'});document.getElementById('rewardsMessage').innerHTML='<div class="success">Toggled</div>';await loadRewards()}catch(e){document.getElementById('rewardsMessage').innerHTML='<div class="error">'+e.message+'</div>'}}));
-  }catch(e){el.innerHTML = '<div class="error">⚠️ Failed to load rewards: '+e.message+'<br><button onclick="loadRewards()">Try Again</button></div>'}
+  }catch(e){el.innerHTML = e.status===501?'<div class="empty">Reward module has not been installed.</div>':'<div class="error">⚠️ Failed to load rewards: '+e.message+'<br><button onclick="loadRewards()">Try Again</button></div>'}
 }
 
 async function showEditTemplateForm(id){
@@ -399,8 +398,7 @@ function renderKeywords(list){if(!list||list.length===0)return '<div class="empt
   .join('')
 +'</select>'
 +(item.response_type==='knowledge' ? (function(){ const opts = (_knowledgeItems||[]).map(k=>'<option value="'+esc(k.key)+'"'+(item.response_target===k.key?' selected':'')+'>'+esc((k.value&&k.value.title)||k.key)+'</option>').join(''); return '<select class="kw-field" data-id="'+item.id+'" data-field="response_target">'+opts+'</select>'; })() : '<input class="kw-field" data-id="'+item.id+'" data-field="response_target" value="'+esc(item.response_target||'')+'" placeholder="Response Target">')
-+'<textarea class="kw-field" data-id="'+item.id+'" data-field="response_text" placeholder="Response Text">'+esc(item.response_text||'')+'</textarea>'
-+'<input class="kw-field" data-id="'+item.id+'" data-field="priority" type="number" value="'+esc(item.priority||'0')+'" placeholder="Priority">'
++ '<textarea class="kw-field" data-id="'+item.id+'" data-field="response_text" placeholder="Response Text">'+esc(item.response_text||'')+'</textarea>'
 +'<div style="margin-top:.5rem">'
 +'<button class="kw-save" data-id="'+item.id+'">Save</button>'
 +'<button class="kw-toggle" data-id="'+item.id+'">'+(item.is_active? 'Disable' : 'Enable')+'</button>'
@@ -463,9 +461,8 @@ async function showCreateKeywordForm(){
     +'<input id="new-keyword" placeholder="Keyword">'
     +'<select id="new-response-type">'+options+'</select>'
     +'<span id="new-response-target-wrapper">'+('<input id="new-response-target" placeholder="Response Target">')+'</span>'
-    +'<textarea id="new-response-text" placeholder="Response Text"></textarea>'
-    +'<input id="new-priority" type="number" placeholder="Priority">'
-    +'<div><button id="createKeywordSave">Create</button><button id="createKeywordCancel" class="secondary">Cancel</button></div>'
+    + '<textarea id="new-response-text" placeholder="Response Text"></textarea>'
+    + '<div><button id="createKeywordSave">Create</button><button id="createKeywordCancel" class="secondary">Cancel</button></div>'
     +'</div>';
 
   const wrapper = document.getElementById('new-response-target-wrapper');
@@ -491,8 +488,7 @@ async function showCreateKeywordForm(){
       keyword:document.getElementById('new-keyword').value,
       response_type:document.getElementById('new-response-type').value,
       response_target:document.getElementById('new-response-target').value,
-      response_text:document.getElementById('new-response-text').value,
-      priority:document.getElementById('new-priority').value||0
+      response_text:document.getElementById('new-response-text').value
     };
     try{await api('/api/dashboard/keywords',{method:'POST',body:JSON.stringify(payload)});document.getElementById('keywordMessage').innerHTML='<div class="success">Created</div>';await loadKeywords()}catch(e){document.getElementById('keywordMessage').innerHTML='<div class="error">'+e.message+'</div>'}
   }
