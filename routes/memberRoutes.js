@@ -18,10 +18,9 @@ const { ok } = require('../utils/response');
 const { getProfile, updateProfile } = require('../services/membership/profileService');
 const { buildMemberCard } = require('../services/membership/memberCardService');
 const { getTransactionHistory, getRewardHistory } = require('../services/membership/historyService');
-const { listMemberCoupons, buildCouponQrToken } = require('../services/coupon/couponService');
+const { listMemberCoupons } = require('../services/coupon/couponService');
 const { generateQrSession } = require('../services/coupon/qrSessionService');
 const AppError = require('../utils/AppError');
-const QRCode = require('qrcode');
 
 const router = express.Router();
 
@@ -81,15 +80,13 @@ router.get(
       throw new AppError(`This coupon is ${coupon.status} and cannot be shown for redemption`, 400);
     }
 
-    const token = buildCouponQrToken(coupon.code);
-    const qrDataUrl = await QRCode.toDataURL(token, {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      width: 400,
-      color: { dark: '#3E2723', light: '#FFFFFF' },
-    });
+    const { qrCode, sessionId, expiresAt, expiresIn } = await generateQrSession(
+      req.member.id,
+      coupon.id,
+      coupon.code
+    );
 
-    return ok(res, { qrCode: qrDataUrl, coupon });
+    return ok(res, { qrCode, sessionId, expiresAt, expiresIn, coupon });
   })
 );
 
