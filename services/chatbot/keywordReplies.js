@@ -245,7 +245,7 @@ async function findActiveKeyword(normalizedText) {
 }
 
 /**
- * STEP 8 - Partial Matching: searches for keywords that contain the normalized text.
+ * STEP 8 - Partial Matching: searches for keywords contained in the normalized text.
  * @param {string} normalizedText - already trimmed + lowercased
  * @returns {Promise<{ keyword: string, response_text: string, response_type: string, response_target: string|null, is_active: boolean } | null>}
  */
@@ -253,7 +253,7 @@ async function findPartialKeyword(normalizedText) {
   const result = await query(
     `SELECT keyword, response_text, response_type, response_target, is_active
      FROM chat_keywords
-     WHERE is_active = TRUE AND LOWER(keyword) LIKE LOWER('%'||$1||'%')
+     WHERE is_active = TRUE AND LOWER($1) LIKE '%' || LOWER(keyword) || '%'
      LIMIT 1`,
     [normalizedText]
   );
