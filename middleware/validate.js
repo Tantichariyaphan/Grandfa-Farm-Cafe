@@ -8,12 +8,25 @@ const AppError = require('../utils/AppError');
 
 function validate(validations) {
   return async (req, res, next) => {
+    const isCouponRequest = req.baseUrl === '/api/coupon';
+    if (isCouponRequest) {
+      console.info('[coupon validation] incoming request', {
+        method: req.method,
+        path: req.path,
+        body: req.body,
+        errors: validationResult(req).array(),
+      });
+    }
+
     for (const validation of validations) {
       // eslint-disable-next-line no-await-in-loop
       await validation.run(req);
     }
 
     const result = validationResult(req);
+    if (isCouponRequest) {
+      console.info('[coupon validation] result', result.array());
+    }
     if (result.isEmpty()) {
       return next();
     }
